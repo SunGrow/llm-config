@@ -1,0 +1,5 @@
+{
+  "permission": {
+    "skill": { "task-start": "deny", "task-continue": "deny", "handoff": "deny" }
+  }
+}
