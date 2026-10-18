@@ -993,7 +993,9 @@ function readSecret(q) {
     };
     const onData = (chunk) => {
       for (const ch of String(chunk).replace(/\x1b\[20[01]~/g, '')) {
-        if (ch === '\r' || ch === '\n') return finish(buf.trim());
+        // Windows sends Enter as \r\n: the menu prompt ends at \r and the \n arrives here first. A newline
+        // before any character is not an answer; an empty paste is cancelled with Ctrl-C instead.
+        if (ch === '\r' || ch === '\n') { if (!buf.trim()) continue; return finish(buf.trim()); }
         if (ch === '\u0003') return finish(null);
         if (ch === '\u007f' || ch === '\b') { buf = buf.slice(0, -1); continue; }
         if (ch >= ' ') buf += ch;
