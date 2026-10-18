@@ -194,6 +194,9 @@ group('gate-core');
   const id = 'toolu_' + Date.now();
   ok((await gate.gateDecision({ command: 'git reset --hard', cwd: repo, toolUseId: id })).decision === 'ask', 'first run for a tool call');
   eq((await gate.gateDecision({ command: 'git reset --hard', cwd: repo, toolUseId: id })).decision, null, 'second hook for the same tool call is silent');
+  ok((await gate.gateDecision({ command: 'git reset --hard HEAD~1', cwd: repo, toolUseId: id })).decision === 'ask', 'reused call id with another command still gates');
+  { const { utimesSync, readdirSync: rd } = await import('node:fs'); const d = join(process.env.JEV_LOG_DIR, 'gate-once'); const old = new Date(Date.now() - 600e3); for (const f of rd(d)) utimesSync(join(d, f), old, old); }
+  ok((await gate.gateDecision({ command: 'git reset --hard', cwd: repo, toolUseId: id })).decision === 'ask', 'reused call id after the window still gates (Kimi reuses ids across sessions)');
   process.env.JEV_HOOK = '0';
   eq((await gate.gateDecision({ command: 'git reset --hard', cwd: repo })).decision, null, 'JEV_HOOK=0 disables the gate');
   delete process.env.JEV_HOOK;
@@ -230,6 +233,8 @@ group('codex-rules');
   } else console.log('  (codex not installed: skipped execpolicy checks)');
   const hooks = JSON.parse(readFileSync(join(COMP, 'codex', 'hooks.json.tmpl'), 'utf8'));
   ok(hooks.hooks.UserPromptSubmit[0].hooks[0].command.includes('codex-route.mjs') && hooks.hooks.PreToolUse[0].matcher === 'Bash', 'hooks.json shape');
+  // Codex runs hook commands with `pwsh -NoProfile -Command` on Windows, where a leading quoted path is a string, not a call.
+  ok([hooks.hooks.UserPromptSubmit[0].hooks[0], hooks.hooks.PreToolUse[0].hooks[0]].every((h) => /^& '\{NODE\}' '\{JEV_HOME\}\/codex-(route|gate)\.mjs'$/.test(h.commandWindows || '')), 'hooks.json: PowerShell-safe commandWindows');
 }
 
 // ---------------------------------------------------------------- key + log

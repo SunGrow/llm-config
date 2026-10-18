@@ -612,16 +612,32 @@ const PLANNERS = {
     // onlyIfExists: settings files with required fields the tool writes itself (e.g. Cursor cli-config.json).
     if (!beforeBuf && a.onlyIfExists === true) return { records: [], status: 'skip', note: 'target does not exist', target: tildeOf(ctx)(dest) };
     const tgt = beforeBuf ? readJsonTarget(beforeBuf, tildeOf(ctx)(dest)) : { obj: {}, indent: 2, eol: '\n' };
-    const ops = [], notes = [];
-    mergeInto(tgt.obj, patch, [], ops, a.override === true, notes);
     const key = `json:${keyOf(dest)}|${a._local ? 'local:' : ''}${fwd(a.from)}`;
     const old = ctx.oldRecords.get(key);
-    const rec = { key, kind: 'json', path: dest, ops: dedupeOps([...(old?.ops || []), ...ops]) };
+    // Re-plan from a base without what this action added last time, so a changed template replaces its old
+    // entries (array items, scalars) instead of piling up next to them. User edits are kept by reverseOps.
+    let base = clone(tgt.obj);
+    if (old?.ops?.length) reverseOps(base, old.ops, (w) => ctx.opts.verbose && ctx.warnings.push(`${comp.id}: ${tildeOf(ctx)(dest)}: ${w}`));
+    let ops = [], notes = [];
+    mergeInto(base, patch, [], ops, a.override === true, notes);
+    // Same entries as last time: merge into the file as it is, so positions stay put. Rebuilding would move
+    // this action's array items to the end and fight another action that merges into the same file.
+    // Compare the entries only (pushed items, set values): which containers had to be created depends on
+    // what other actions merged into the same file before this one.
+    const entries = (list) => dedupeOps(list.filter((o) => o.op === 'push' || o.op === 'set' || o.op === 'replace'));
+    const sameSet = (x, y) => x.length === y.length && x.every((o) => y.some((p) => deq(o, p)));
+    if (old?.ops?.length && sameSet(entries(ops), entries(old.ops))) {
+      base = clone(tgt.obj); const more = []; notes = [];
+      mergeInto(base, patch, [], more, a.override === true, notes);
+      ops = [...old.ops, ...more];
+    }
+    const rec = { key, kind: 'json', path: dest, ops: dedupeOps(ops) };
     if (old ? old.created : !beforeBuf) rec.created = true;
     let status = 'unchanged';
-    if (ops.length) { ctx.vfs.set(dest, jsonOut(tgt.obj, tgt.indent, tgt.eol), comp.id); status = beforeBuf ? 'update' : 'create'; }
+    const changed = !beforeBuf || !deq(base, tgt.obj);
+    if (changed) { ctx.vfs.set(dest, jsonOut(base, tgt.indent, tgt.eol), comp.id); status = beforeBuf ? 'update' : 'create'; }
     if (ctx.opts.verbose) notes.forEach((n) => ctx.warnings.push(`${comp.id}: ${tildeOf(ctx)(dest)}: ${n}`));
-    return { records: [rec], status, note: ops.length ? `${ops.length} addition(s)` : '', target: tildeOf(ctx)(dest) };
+    return { records: [rec], status, note: changed && ops.length ? `${ops.length} addition(s)` : '', target: tildeOf(ctx)(dest) };
   },
 
   'npm-install'(a, comp, ctx) {
@@ -815,7 +831,10 @@ function applyAll(ctx) {
       } else if (ex.kind === 'rmrf') {
         fs.rmSync(ex.path, { recursive: true, force: true });
       } else if (ex.kind === 'npm') {
-        const r = spawnSync('npm', ['install', '--omit=dev', '--no-audit', '--no-fund'], { cwd: ex.dir, stdio: ctx.opts.verbose ? 'inherit' : 'pipe', encoding: 'utf8', shell: IS_WIN });
+        // npm is npm.cmd on Windows, which needs cmd.exe; call it directly instead of `shell: true` (DEP0190). Fixed args only.
+        const npmArgs = ['install', '--omit=dev', '--no-audit', '--no-fund'];
+        const [cmd, args] = IS_WIN ? [process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', 'npm', ...npmArgs]] : ['npm', npmArgs];
+        const r = spawnSync(cmd, args, { cwd: ex.dir, stdio: ctx.opts.verbose ? 'inherit' : 'pipe', encoding: 'utf8', windowsHide: true });
         if (r.error) throw r.error;
         if (r.status !== 0) throw new Error(`npm exited with ${r.status}: ${String(r.stderr || '').trim().split('\n').slice(-3).join(' | ')}`);
       }

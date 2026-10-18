@@ -5,6 +5,7 @@
 // Never throws: any failure returns { decision: null } (fail open).
 import { mkdirSync, writeFileSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { join, resolve, relative, isAbsolute } from 'node:path';
 import { tmpdir } from 'node:os';
 import { runPreset, redact, optedOut, LOG_DIR } from './lib.mjs';
@@ -126,13 +127,17 @@ export function classify(command, cwd, git = mkGit(Date.now() + 10000)) {
 }
 
 // Two hook registrations can match one command (e.g. `git add . && rm -r x`); run the gate once per tool call.
-export function firstRunFor(id) {
+// Both registrations fire within seconds, so a marker only counts for ONCE_WINDOW_MS and only for the same
+// command: some models reuse call ids across sessions (Kimi: "functions.bash:0"), which must not skip the gate.
+const ONCE_WINDOW_MS = 120e3;
+export function firstRunFor(id, command = '') {
   if (!id) return true;
   try {
     const dir = join(LOG_DIR, 'gate-once');
     mkdirSync(dir, { recursive: true });
-    try { for (const f of readdirSync(dir)) { const p = join(dir, f); if (Date.now() - statSync(p).mtimeMs > 3600e3) unlinkSync(p); } } catch { /* ignore */ }
-    writeFileSync(join(dir, String(id).replace(/[^\w-]/g, '_')), '', { flag: 'wx' });
+    try { for (const f of readdirSync(dir)) { const p = join(dir, f); if (Date.now() - statSync(p).mtimeMs > ONCE_WINDOW_MS) unlinkSync(p); } } catch { /* ignore */ }
+    const name = String(id).replace(/[^\w-]/g, '_').slice(0, 100) + '_' + createHash('sha256').update(String(command)).digest('hex').slice(0, 12);
+    writeFileSync(join(dir, name), '', { flag: 'wx' });
     return true;
   } catch (e) { return e?.code !== 'EEXIST'; }
 }
@@ -151,7 +156,7 @@ export async function gateDecision({ command, cwd, toolUseId, deadline = Date.no
     const git = mkGit(deadline);
     const f = classify(command, cwd, git);
     if (!f.commits.length && !f.pushes.length && !f.destructive.length) return none;
-    if (!firstRunFor(toolUseId)) return none;
+    if (!firstRunFor(toolUseId, command)) return none;
 
     // Deterministic floor: these need confirmation even if Jev is unsure or unreachable.
     if (f.hard.length) return { decision: 'ask', level: 'hard', reason: hardReason(f.hard[0]), found: f };

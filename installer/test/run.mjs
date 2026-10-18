@@ -428,6 +428,28 @@ test('include outside the repository is refused', () => {
   assert(/outside the repository/.test(r.out), r.out);
 });
 
+// ------------------------------------------------------------------ json-merge after a template change
+test('json-merge: a changed template replaces its old entries, keeps user entries, uninstalls cleanly', () => {
+  const root = path.join(TMP, 'root4'), home = path.join(TMP, 'hj1');
+  const J = (rel) => path.join(root, 'components', 'jm', rel);
+  write(J('component.json'), JSON.stringify({ id: 'jm', title: 'JSON merge', group: 'extras',
+    actions: [{ type: 'json-merge', from: 'files/frag.json', to: '{HOME}/.jm/settings.json' }] }));
+  write(J('files/frag.json'), JSON.stringify({ hooks: [{ cmd: 'old' }], level: 'v1' }));
+  write(path.join(home, '.jm', 'settings.json'), JSON.stringify({ mine: 1 }, null, 2));
+  eq(run(root, home, ['--yes', '--components', 'jm']).code, 0);
+  const s1 = JSON.parse(read(path.join(home, '.jm', 'settings.json')));
+  s1.hooks.push({ cmd: 'user' });
+  write(path.join(home, '.jm', 'settings.json'), JSON.stringify(s1, null, 2));
+  write(J('files/frag.json'), JSON.stringify({ hooks: [{ cmd: 'new' }], level: 'v2' }));
+  const r = run(root, home, ['--yes', '--components', 'jm']);
+  eq(r.code, 0, r.out);
+  const s2 = JSON.parse(read(path.join(home, '.jm', 'settings.json')));
+  eq(JSON.stringify(s2), JSON.stringify({ mine: 1, hooks: [{ cmd: 'user' }, { cmd: 'new' }], level: 'v2' }), 'after template change');
+  assert(/Nothing to change/.test(run(root, home, ['--yes', '--components', 'jm']).out), 'second run not idempotent');
+  eq(run(root, home, ['--uninstall', '--yes']).code, 0);
+  eq(JSON.stringify(JSON.parse(read(path.join(home, '.jm', 'settings.json')))), JSON.stringify({ mine: 1, hooks: [{ cmd: 'user' }] }), 'after uninstall');
+});
+
 // ------------------------------------------------------------------ API key prompt
 const ROOT3 = path.join(TMP, 'root3');
 const K = (id, rel) => path.join(ROOT3, 'components', id, rel);

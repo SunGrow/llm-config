@@ -65,7 +65,7 @@ export const JevPlugin = async ({ directory }) => {
       let r;
       try {
         const dir = output.args.workdir ? resolve(cwd, String(output.args.workdir)) : cwd;
-        r = await gate.gateDecision({ command, cwd: dir, toolUseId: input.callID ? 'opencode-' + input.callID : undefined, deadline: Date.now() + 10000 });
+        r = await gate.gateDecision({ command, cwd: dir, toolUseId: input.callID ? 'opencode-' + (input.sessionID || '') + '-' + input.callID : undefined, deadline: Date.now() + 10000 });
       } catch { return; }
       if (r?.decision === 'ask') {
         throw new Error(`${r.reason} Blocked until the user confirms: ask the user in chat; only if they explicitly confirm, rerun the same command with \`${gate.CONFIRM_MARKER}\` appended. If they decline, do not retry.`);
