@@ -44,6 +44,11 @@ More action fields:
 
 More component fields:
 - `"replaces": ["<id>"]`: when this component is selected, the listed one is not installed (e.g. a private overlay of a public pack).
+- `"apiKey": { "name", "env", "configFile", "prefix"?, "url"?, "checkUrl"? }`: the component needs a key, found in env `env`,
+  in `$XDG_CONFIG_HOME/<configFile>` (else `~/.config/<configFile>`), or on Windows in the user environment (registry).
+  If none is found, an interactive install offers: paste it now (hidden; checked with a GET to `checkUrl`, 401/403 = rejected;
+  saved with mode 600 after the install is confirmed), add it later, or skip the component and everything that requires it.
+  `--yes` installs and warns; `--dry-run` only warns.
 
 Shadowing: if several selected components copy to the same file, the last one in plan order (dependencies first, then
 group and id; local overlays extend the component they name) owns it and the others skip that file.
@@ -66,8 +71,10 @@ All paths are written with forward slashes (valid on Windows too).
   `--check` exits 3 on drift; `--json` prints the plan as JSON. Files are written atomically (temp file + rename, retried on Windows EPERM).
   Size budgets warn when an always-loaded file grows past a tool's limit (Codex AGENTS.md 16 KiB of its 32 KiB cap, Devin 6,000 chars).
 - Before overwriting or modifying any existing file it copies it to `~/.llm-config/backups/<timestamp>/<path relative to home>`.
-- Records everything in `~/.llm-config/manifest.json`; `--uninstall [ids]` reverses it.
-- Never writes secrets. Never edits a file outside the variables above.
+- Records everything in `~/.llm-config/manifest.json` (plus `source`, the checkout it ran from); `--uninstall [ids]` reverses it.
+  `--update` re-applies every installed component from the current checkout; `--check` with no selection checks the installed set.
+- Writes a secret only when the user pastes it at an `apiKey` prompt, and only to that key file; never prints, logs,
+  backs up or records it. Never edits a file outside the variables above.
 - `--home <dir>` redirects HOME (and all variables) for tests.
 
 ## Shared layout after install

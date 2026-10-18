@@ -8,8 +8,24 @@ Works on Linux, macOS and Windows. Needs Node.js 18+ (20+ recommended).
 
 ## Install
 
+One line, no clone needed (downloads the repo to `~/.llm-config/repo`, using git if present, else a tarball):
+
 ```sh
-git clone <this repo> llm-config && cd llm-config
+curl -fsSL https://raw.githubusercontent.com/SunGrow/llm-config/main/get.sh | sh
+```
+
+```powershell
+irm https://raw.githubusercontent.com/SunGrow/llm-config/main/get.ps1 | iex
+```
+
+Pass options after `sh -s --`, e.g. `curl -fsSL …/get.sh | sh -s -- --yes --components claude,opencode`
+(PowerShell: `& ([scriptblock]::Create((irm …/get.ps1))) --yes --components claude,opencode`).
+Running the same line again updates the files and re-applies what you installed.
+
+Or from a clone:
+
+```sh
+git clone https://github.com/SunGrow/llm-config.git && cd llm-config
 ./install.sh            # interactive picker (Linux/macOS, also Git Bash)
 ```
 
@@ -26,6 +42,15 @@ Non-interactive:
 ./install.sh --check                              # exit 3 if installed files drifted from the repo
 ./install.sh --uninstall                          # remove everything this installer added
 ```
+
+## Update
+
+```sh
+./update.sh             # git pull, then re-apply every installed component (Windows: .\update.ps1)
+```
+
+`update.sh` accepts the installer's options (`--dry-run`, `--yes`). `--update` alone re-applies the installed components
+from the current checkout without pulling; `LLM_CONFIG_NO_PULL=1` skips the pull.
 
 Re-running is safe: a second run reports "Nothing to change". Existing files are backed up to
 `~/.llm-config/backups/<timestamp>/` before any change; your own text in shared files (CLAUDE.md, AGENTS.md, settings.json)
@@ -50,6 +75,11 @@ is kept, the installer only manages marked blocks and the JSON keys it added.
 Always-loaded size after install: about 4.5k characters per tool, plus short skill and agent descriptions.
 
 ### Jev key
+
+If no key is found (`OPENROUTER_API_KEY`, `~/.config/jev/key`, or on Windows the user environment), the installer asks:
+paste it now (hidden input, checked against OpenRouter, saved to `~/.config/jev/key` with mode 600 after you confirm the install),
+add it later (Jev is installed but stays inactive), or skip Jev. With `--yes` it installs and prints how to add the key.
+The key is never printed, backed up or written to the manifest; uninstall leaves the key file in place. To add it yourself:
 
 ```sh
 mkdir -p ~/.config/jev && printf %s "$OPENROUTER_API_KEY" > ~/.config/jev/key && chmod 600 ~/.config/jev/key

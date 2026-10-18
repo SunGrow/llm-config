@@ -178,9 +178,11 @@ Usage: install.sh [options]        (or: node installer/install.mjs [options])
 
   --components a,b   install exactly these components (plus what they require)
   --all              install every component available on this platform
+  --update           re-apply every installed component from this checkout (no picker)
   --yes, -y          no prompts (uses defaults unless --components/--all)
   --dry-run, -n      show planned changes and diffs, write nothing
-  --check            like --dry-run without diffs; exit 3 if anything would change (drift check for CI)
+  --check            like --dry-run without diffs; exit 3 if anything would change (drift check for CI);
+                     without --components/--all it checks the installed components
   --json             with --dry-run/--check: print the plan as JSON on stdout instead of tables
   --uninstall [a,b]  remove the given components (default: everything installed)
   --list             list components and their status
@@ -195,7 +197,7 @@ State: ~/.llm-config/manifest.json, backups in ~/.llm-config/backups/<timestamp>
 
 const splitList = (s) => String(s).split(/[,\s]+/).map((x) => x.trim()).filter(Boolean);
 function parseArgs(argv) {
-  const o = { components: null, all: false, yes: false, dryRun: false, check: false, json: false, uninstall: false, uninstallIds: null, list: false, home: null, root: null, color: null, verbose: false, help: false };
+  const o = { components: null, all: false, yes: false, dryRun: false, check: false, json: false, update: false, uninstall: false, uninstallIds: null, list: false, home: null, root: null, color: null, verbose: false, help: false };
   for (let i = 0; i < argv.length; i++) {
     let a = argv[i], val = null;
     const eq = a.indexOf('=');
@@ -208,6 +210,7 @@ function parseArgs(argv) {
     switch (a) {
       case '--components': case '-c': o.components = [...(o.components || []), ...splitList(next())]; break;
       case '--all': o.all = true; break;
+      case '--update': case '-u': o.update = true; break;
       case '--yes': case '-y': o.yes = true; break;
       case '--dry-run': case '-n': o.dryRun = true; break;
       case '--check': o.check = true; o.dryRun = true; break;
@@ -226,7 +229,10 @@ function parseArgs(argv) {
       default: throw new UsageError(`unknown argument "${argv[i]}"`);
     }
   }
-  if (o.all && o.components) throw new UsageError('use either --all or --components, not both');
+  if ([o.all, !!o.components, o.update].filter(Boolean).length > 1) throw new UsageError('use only one of --all, --components, --update');
+  if (o.update && o.uninstall) throw new UsageError('use either --update or --uninstall');
+  // a drift check with no explicit selection compares what is installed
+  if (o.check && !o.all && !o.components && !o.uninstall) o.update = true;
   return o;
 }
 
@@ -270,6 +276,7 @@ function loadComponents(root) {
         requiresBinaries: Array.isArray(def.requiresBinaries) ? def.requiresBinaries : [],
         replaces: Array.isArray(def.replaces) ? def.replaces : [],
         postInstall: def.postInstall || '',
+        apiKey: isObj(def.apiKey) && def.apiKey.env && def.apiKey.configFile ? def.apiKey : null,
         actions,
         local: isLocal,
         localOverlay: false,
@@ -360,6 +367,7 @@ function makeCtx(opts, vars, root) {
     warnings: [],
     failed: false,
     stateDir: `${vars.HOME}/.llm-config`,
+    pendingKeys: [],
     backupDir: `${vars.HOME}/.llm-config/backups/${stamp}`,
     backedUp: new Set(),
     createdDirs: new Set(),
@@ -943,6 +951,104 @@ function printApplied(changes, ctx) {
   if (ctx.backedUp.size) console.log(`\nBackups: ${t(ctx.backupDir)}`);
 }
 
+// ---------------------------------------------------------------- API keys
+// Component field "apiKey": { name, env, configFile (relative to $XDG_CONFIG_HOME or ~/.config), prefix?, url?, checkUrl? }.
+// The key is looked up like the tool does it: env var, then the key file, then (Windows) the user environment in the registry.
+// A pasted key is never echoed, logged, backed up or recorded in the manifest; it is written once, after the install is confirmed.
+function apiKeyFile(k, vars, opts) {
+  const base = (!opts.home && process.env.XDG_CONFIG_HOME?.trim()) || `${vars.HOME}/.config`;
+  return absPath(`${base}/${k.configFile}`);
+}
+function apiKeyPresent(k, file, opts) {
+  if (!opts.home && process.env[k.env]?.trim()) return true;
+  try { if (fs.readFileSync(file, 'utf8').trim()) return true; } catch { /* missing */ }
+  if (IS_WIN && !opts.home) {
+    try {
+      const out = spawnSync('reg', ['query', 'HKCU\\Environment', '/v', k.env], { encoding: 'utf8', windowsHide: true }).stdout || '';
+      if (new RegExp(`${k.env}\\s+REG_\\w+\\s+\\S`).test(out)) return true;
+    } catch { /* not set */ }
+  }
+  return false;
+}
+async function checkApiKey(k, secret) {
+  if (!k.checkUrl || typeof fetch !== 'function') return { state: 'unknown' };
+  try {
+    const r = await fetch(k.checkUrl, { headers: { Authorization: `Bearer ${secret}` }, signal: AbortSignal.timeout(8000) });
+    if (r.ok) return { state: 'valid' };
+    if (r.status === 401 || r.status === 403) return { state: 'invalid', status: r.status };
+    return { state: 'unknown', why: `HTTP ${r.status}` };
+  } catch (e) { return { state: 'unknown', why: e?.name === 'TimeoutError' ? 'timed out' : 'no connection' }; }
+}
+function readSecret(q) {
+  return new Promise((resolve) => {
+    const { stdin, stdout } = process;
+    stdout.write(q);
+    let buf = '';
+    const finish = (v) => {
+      stdin.removeListener('data', onData);
+      try { stdin.setRawMode(false); } catch { /* ignore */ }
+      stdin.pause();
+      stdout.write(v === null ? '\n' : dim(` (${v.length} characters)\n`));
+      resolve(v);
+    };
+    const onData = (chunk) => {
+      for (const ch of String(chunk).replace(/\x1b\[20[01]~/g, '')) {
+        if (ch === '\r' || ch === '\n') return finish(buf.trim());
+        if (ch === '\u0003') return finish(null);
+        if (ch === '\u007f' || ch === '\b') { buf = buf.slice(0, -1); continue; }
+        if (ch >= ' ') buf += ch;
+      }
+    };
+    try { stdin.setRawMode(true); } catch { stdout.write('\n'); return resolve(null); }
+    stdin.setEncoding('utf8');
+    stdin.on('data', onData);
+    stdin.resume();
+  });
+}
+function saveSecret(file, secret) {
+  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  const tmp = `${file}.llm-config-tmp-${process.pid}`;
+  fs.writeFileSync(tmp, secret, { mode: 0o600 });
+  if (!IS_WIN) fs.chmodSync(tmp, 0o600);
+  fs.renameSync(tmp, file);
+}
+// Returns 'ok' (key present, pasted, or left for later), 'skip' (do not install the component) or 'abort'.
+async function handleApiKey(c, vars, opts, prompts, ctx) {
+  const k = c.apiKey;
+  const t = tildeOf(ctx);
+  const file = apiKeyFile(k, vars, opts);
+  if (apiKeyPresent(k, file, opts)) return 'ok';
+  const later = `${c.id}: no ${k.name} yet, so it stays inactive until you set ${k.env} or put the key in ${t(file)}`;
+  if (opts.dryRun) { ctx.warnings.push(`${c.id}: no ${k.name} found (${k.env} or ${t(file)}); a real install asks how to handle it`); return 'ok'; }
+  if (!prompts.interactive) { ctx.warnings.push(later); return 'ok'; }
+  console.log('\n' + bold(`${c.title} needs your ${k.name}`) + ` (${k.env}), and none was found.` + (k.url ? dim(`  Get one at ${k.url}`) : ''));
+  console.log(`  1) Paste it now: saved to ${t(file)}, readable only by you (input is hidden)`);
+  console.log(`  2) Add it later: install now; ${c.id} stays inactive until the key exists`);
+  console.log(`  3) Skip ${c.id}: do not install it this time`);
+  for (;;) {
+    const a = await ask('Choice [1/2/3, Enter = 2]: ');
+    if (a === null) return 'abort';
+    const v = a.trim();
+    if (v === '' || v === '2') {
+      ctx.warnings.push(later);
+      return 'ok';
+    }
+    if (v === '3') return 'skip';
+    if (v !== '1') { console.log(red('Type 1, 2 or 3.')); continue; }
+    if (!prompts.raw) { console.log(yellow('Hidden input needs a real terminal here. Choose 2 and write the key file yourself (see the README).')); continue; }
+    const secret = await readSecret(`Paste your ${k.name}, then press Enter (Ctrl-C to go back): `);
+    if (!secret) continue;
+    if (/\s/.test(secret)) { console.log(red('That contains spaces, so it is not a key. Try again.')); continue; }
+    if (k.prefix && !secret.startsWith(k.prefix) && !(await confirm(yellow(`${k.name}s start with "${k.prefix}" and this one does not. Use it anyway?`)))) continue;
+    process.stdout.write(dim('Checking the key... '));
+    const chk = await checkApiKey(k, secret);
+    if (chk.state === 'invalid') { console.log(red(`rejected (HTTP ${chk.status}). Paste another key, or choose 2 or 3.`)); continue; }
+    console.log(chk.state === 'valid' ? green('accepted.') : yellow(`not checked (${chk.why || 'no check available'}); it will be saved as entered.`));
+    ctx.pendingKeys.push({ file, secret, name: k.name });
+    return 'ok';
+  }
+}
+
 // ---------------------------------------------------------------- prompts
 function ask(q) {
   return new Promise((resolve) => {
@@ -1082,7 +1188,13 @@ async function runInstall(opts, comps, info, manifest, vars, root, prompts) {
   const ctx = makeCtx(opts, vars, root);
   const t = tildeOf(ctx);
   let chosen;
-  if (opts.components) {
+  if (opts.update) {
+    const installed = Object.keys(manifest.components);
+    if (!installed.length) { console.error(red('error: nothing is installed yet, so there is nothing to update. Run the installer without --update first.')); return 2; }
+    const gone = installed.filter((id) => !comps.has(id));
+    if (gone.length) ctx.warnings.push(`no longer in this checkout, left as installed: ${gone.join(', ')} (remove with --uninstall ${gone.join(',')})`);
+    chosen = new Set(installed.filter((id) => comps.has(id)));
+  } else if (opts.components) {
     const unknown = opts.components.filter((id) => !comps.has(id));
     if (unknown.length) { console.error(red(`error: unknown component(s): ${unknown.join(', ')} (see --list)`)); return 2; }
     chosen = new Set(opts.components);
@@ -1109,6 +1221,19 @@ async function runInstall(opts, comps, info, manifest, vars, root, prompts) {
     if (inf.missingBins.length) { ctx.warnings.push(`${id}: skipped, missing ${inf.missingBins.join(', ')} on PATH`); row(ctx, id, 'component', '', 'skip', `missing ${inf.missingBins.join(', ')}`); continue; }
     final.push(c);
   }
+  // A component that needs an API key: if none is found, ask how to handle it before anything is planned.
+  for (const c of [...final]) {
+    if (!c.apiKey || !final.includes(c)) continue;
+    const res = await handleApiKey(c, vars, opts, prompts, ctx);
+    if (res === 'abort') { console.log('Aborted.'); return 130; }
+    if (res === 'skip') {
+      const drop = new Set([c.id]);
+      for (let grew = true; grew;) { grew = false; for (const d of final) if (!drop.has(d.id) && d.requires.some((r) => drop.has(r))) { drop.add(d.id); grew = true; } }
+      for (const id of drop) final.splice(final.findIndex((x) => x.id === id), 1);
+      ctx.warnings.push(`not installed (no ${c.apiKey.name}): ${[...drop].join(', ')}`);
+    }
+  }
+  if (!final.length) { printWarnings(ctx); console.log('Nothing left to install.'); return 0; }
   const finalIds = new Set(final.map((c) => c.id));
   for (const c of final) for (const r of c.requires) if (!finalIds.has(r) && comps.has(r) && !manifest.components[r]) ctx.warnings.push(`${c.id} requires ${r}, which is not being installed`);
   ctx.whenSet = new Set([...finalIds, ...Object.keys(manifest.components)]);
@@ -1165,7 +1290,7 @@ async function runInstall(opts, comps, info, manifest, vars, root, prompts) {
     console.log('\n' + (changes.length || ctx.execs.length ? `Dry run: ${changes.length} file change(s), ${ctx.execs.length} command(s) planned. Nothing was written.` : 'Dry run: nothing to change.'));
     return ctx.failed ? 1 : 0;
   }
-  const newManifest = { version: MANIFEST_VERSION, home: vars.HOME, components: newComps, dirs: manifest.dirs || [] };
+  const newManifest = { version: MANIFEST_VERSION, home: vars.HOME, source: fwd(root), components: newComps, dirs: manifest.dirs || [] };
   if (!changes.length && !ctx.execs.length) {
     const wrote = writeManifest(`${ctx.stateDir}/manifest.json`, newManifest);
     console.log('\n' + green('Nothing to change: everything is already up to date.') + (wrote ? dim(' (manifest refreshed)') : ''));
@@ -1175,6 +1300,10 @@ async function runInstall(opts, comps, info, manifest, vars, root, prompts) {
   if (prompts.interactive && !(await confirm(`\nApply ${changes.length} file change(s) and ${ctx.execs.length} command(s)?`))) { console.log('Aborted.'); return 130; }
 
   const applied = applyAll(ctx);
+  for (const k of ctx.pendingKeys) {
+    try { saveSecret(k.file, k.secret); console.log(green(`Saved your ${k.name} to ${t(k.file)} (readable only by you).`)); }
+    catch (e) { ctx.failed = true; console.log(red(`failed to save the ${k.name} to ${t(k.file)}: ${e.message}`)); }
+  }
   const now = new Date().toISOString();
   const touched = new Set([...applied.filter((c) => c.ok).map((c) => c.owner), ...ctx.execs.filter((e) => e.ok).map((e) => e.owner)]);
   for (const id of touched) if (newComps[id]) newComps[id].updatedAt = now;
@@ -1252,7 +1381,7 @@ async function runUninstall(opts, comps, manifest, vars, root, prompts) {
   for (const d of dirs) {
     try { fs.rmdirSync(d); } catch (e) { if (e.code !== 'ENOENT') left.push(d); }
   }
-  const newManifest = { version: MANIFEST_VERSION, home: vars.HOME, components: keepComps, dirs: left.sort() };
+  const newManifest = { version: MANIFEST_VERSION, home: vars.HOME, ...(manifest.source ? { source: manifest.source } : {}), components: keepComps, dirs: left.sort() };
   try { writeManifest(`${ctx.stateDir}/manifest.json`, newManifest); } catch (e) { ctx.failed = true; console.log(red(`failed to write manifest: ${e.message}`)); }
   printApplied(applied, ctx);
   console.log('\n' + bold('Open a new session of each tool so it picks up the change.'));

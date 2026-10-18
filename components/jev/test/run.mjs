@@ -316,9 +316,9 @@ group('opencode');
 {
   const dir = join(TMP, 'opencode', 'plugins'); mkdirSync(dir, { recursive: true });
   const tmpl = readFileSync(join(COMP, 'opencode', 'jev.js.tmpl'), 'utf8');
-  ok(!/\{(HOME|AGENTS_HOME|CLAUDE_HOME|CODEX_HOME|OPENCODE_HOME|GEMINI_HOME|NODE|OS)\}/.test(tmpl), 'template uses only {JEV_HOME}');
+  ok(!/\{(HOME|AGENTS_HOME|CLAUDE_HOME|CODEX_HOME|OPENCODE_HOME|GEMINI_HOME|OS)\}/.test(tmpl), 'template uses only {JEV_HOME} and {NODE}');
   const file = join(dir, 'jev.js');
-  writeFileSync(file, tmpl.replace(/\{JEV_HOME\}/g, TOOL.replace(/\\/g, '/')));
+  writeFileSync(file, tmpl.replace(/\{JEV_HOME\}/g, TOOL.replace(/\\/g, '/')).replace(/\{NODE\}/g, process.execPath.replace(/\\/g, '/')));
   const mod = await import(pathToFileURL(file).href + '?t=' + Date.now());
   eq(Object.keys(mod), ['JevPlugin'], 'plugin module exports only the plugin function');
   const hooks = await mod.JevPlugin({ directory: join(TMP, 'repo'), worktree: join(TMP, 'repo'), project: {}, client: {}, $: null });
@@ -352,6 +352,17 @@ group('opencode');
   const empty = await mod.JevPlugin({ directory: TMP });
   delete process.env.JEV_HOME;
   eq(Object.keys(empty).length, 0, 'missing tool folder: no hooks (fail open)');
+
+  // Under Bun lib.decide() hands the call to decide-cli.mjs in Node; check the child side here.
+  const cli = (input, env = {}) => {
+    const r = spawnSync(process.execPath, [join(TOOL, 'decide-cli.mjs')], { input, encoding: 'utf8', env: { ...process.env, ...env } });
+    try { return JSON.parse(r.stdout); } catch { return { raw: r.stdout, err: r.stderr }; }
+  };
+  const fake = { kind: { choice: 'explain', confidence: 1 } };
+  const viaCli = cli(JSON.stringify({ args: { state: 'x', questions: {} }, opts: { label: 'test', timeout: 1000, retries: 0, deadline: null } }), { JEV_TEST_ANSWERS: JSON.stringify(fake), JEV_IN_CHILD: '1' });
+  ok(viaCli.ok === true && viaCli.answers?.kind?.choice === 'explain', 'decide-cli returns decide() result as JSON', JSON.stringify(viaCli));
+  const badCli = cli('not json', { JEV_IN_CHILD: '1' });
+  ok(badCli.ok === false && /decide-cli/.test(badCli.error?.message), 'decide-cli: bad input gives an error result, not a crash', JSON.stringify(badCli));
 }
 
 // ---------------------------------------------------------------- manifests

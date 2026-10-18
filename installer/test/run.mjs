@@ -428,6 +428,55 @@ test('include outside the repository is refused', () => {
   assert(/outside the repository/.test(r.out), r.out);
 });
 
+// ------------------------------------------------------------------ API key prompt
+const ROOT3 = path.join(TMP, 'root3');
+const K = (id, rel) => path.join(ROOT3, 'components', id, rel);
+write(K('keyed', 'component.json'), JSON.stringify({
+  id: 'keyed', title: 'Keyed tool', group: 'extras',
+  apiKey: { name: 'Test API key', env: 'LLMC_TEST_KEY', configFile: 'keyed/key', prefix: 'tk-' },
+  actions: [{ type: 'copy', from: 'files/a.txt', to: '{HOME}/.keyed/a.txt' }],
+}));
+write(K('keyed', 'files/a.txt'), 'a\n');
+write(K('keyuser', 'component.json'), JSON.stringify({
+  id: 'keyuser', title: 'Needs keyed', group: 'extras', requires: ['keyed'],
+  actions: [{ type: 'copy', from: 'files/b.txt', to: '{HOME}/.keyuser/b.txt' }],
+}));
+write(K('keyuser', 'files/b.txt'), 'b\n');
+const runTTY = (home, args, input) => {
+  const r = spawnSync(process.execPath, [INSTALLER, '--root', ROOT3, '--home', home, '--no-color', ...args], {
+    encoding: 'utf8', input, env: { ...process.env, NO_COLOR: '1', LLM_CONFIG_TTY: '1' },
+  });
+  return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
+};
+test('missing API key with --yes: installs and warns how to add it', () => {
+  const home = path.join(TMP, 'hk1');
+  const r = run(ROOT3, home, ['--yes', '--components', 'keyed']);
+  eq(r.code, 0, r.out);
+  assert(/stays inactive until you set LLMC_TEST_KEY/.test(r.out), r.out);
+  assert(exists(path.join(home, '.keyed', 'a.txt')), 'component not installed');
+  assert(!exists(path.join(home, '.config', 'keyed', 'key')), 'key file must not be created');
+});
+test('missing API key, choice 3 skips the component and what requires it', () => {
+  const home = path.join(TMP, 'hk2');
+  const r = runTTY(home, ['--components', 'keyed,keyuser'], '3\n');
+  assert(/needs your Test API key/.test(r.out) && /1\) Paste it now/.test(r.out), r.out);
+  assert(/not installed \(no Test API key\): keyed, keyuser/.test(r.out), r.out);
+  assert(!exists(path.join(home, '.keyed')) && !exists(path.join(home, '.keyuser')), 'skipped components were installed');
+});
+test('missing API key, paste without a real terminal is refused and asks again', () => {
+  const r = runTTY(path.join(TMP, 'hk3'), ['--components', 'keyed'], '1\n3\n');
+  assert(/Hidden input needs a real terminal/.test(r.out), r.out);
+});
+test('API key file present: no prompt; dry run without a key only warns', () => {
+  const home = path.join(TMP, 'hk4');
+  write(path.join(home, '.config', 'keyed', 'key'), 'tk-present');
+  const r = run(ROOT3, home, ['--yes', '--components', 'keyed']);
+  eq(r.code, 0, r.out);
+  assert(!/Test API key/.test(r.out), r.out);
+  const d = run(ROOT3, path.join(TMP, 'hk5'), ['--dry-run', '--components', 'keyed']);
+  assert(/no Test API key found .*a real install asks/.test(d.out), d.out);
+});
+
 console.log(`\n${passed} passed, ${failed} failed (${PLAT}, node ${process.versions.node})`);
 if (!failed && !process.env.KEEP_TMP) fs.rmSync(TMP, { recursive: true, force: true });
 process.exitCode = failed ? 1 : 0;

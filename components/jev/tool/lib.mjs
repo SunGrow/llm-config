@@ -1,7 +1,7 @@
 // Shared Jev (TypeSafe) client for the CLI and the tool adapters (Claude Code, Codex, opencode), routed through OpenRouter.
 import { readFileSync, appendFileSync, mkdirSync, statSync, renameSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -147,6 +147,9 @@ export async function decide({ state, questions, model }, { label = 'ask', timeo
     catch (e) { return { ok: false, model: 'test', ms: 0, error: { message: 'bad JEV_TEST_ANSWERS: ' + e.message } }; }
   }
   if (process.env.JEV_OFFLINE === '1') return { ok: false, model: useModel, ms: 0, error: { message: 'JEV_OFFLINE=1' } };
+  // Bun (opencode's plugin runtime) marks a response body used once the SDK takes a reader on it, so every
+  // call fails with "Body already used". Run the call in Node instead; the child writes the log line.
+  if (process.versions.bun && !process.env.JEV_IN_CHILD) return decideInNode({ state, questions, model }, { label, timeout, retries, deadline });
   const key = apiKey();
   if (!key) return { ok: false, model: useModel, ms: 0, error: { message: 'no API key: set OPENROUTER_API_KEY or write it to ' + keyFilePath() } };
   const sent = prepState(state);
@@ -177,6 +180,25 @@ export async function decide({ state, questions, model }, { label = 'ask', timeo
     log({ label, model: useModel, ms, error });
     return { ok: false, model: useModel, ms, error };
   }
+}
+
+function decideInNode(args, opts) {
+  const t0 = Date.now();
+  const fail = (message) => ({ ok: false, model: args.model || DEFAULT_MODEL, ms: Date.now() - t0, error: { message } });
+  const budget = Math.max(500, Math.min(opts.timeout * 2 + 1000, (Number.isFinite(opts.deadline) ? opts.deadline : Infinity) - Date.now()));
+  return new Promise((done) => {
+    let child;
+    try {
+      child = execFile(process.env.JEV_NODE || 'node', [join(HERE, 'decide-cli.mjs')],
+        { timeout: budget, maxBuffer: 1 << 20, windowsHide: true, env: { ...process.env, JEV_IN_CHILD: '1' } },
+        (err, stdout) => {
+          if (err) return done(fail('node child failed: ' + String(err.message).split('\n')[0].slice(0, 200)));
+          try { done(JSON.parse(stdout)); } catch { done(fail('node child returned no JSON')); }
+        });
+    } catch (e) { return done(fail('cannot start node: ' + e.message)); }
+    child.stdin.on('error', () => {});
+    child.stdin.end(JSON.stringify({ args, opts: { ...opts, deadline: Number.isFinite(opts.deadline) ? opts.deadline : null } }));
+  });
 }
 
 export async function runPreset(name, state, opts = {}) {

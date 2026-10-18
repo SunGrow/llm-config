@@ -15,9 +15,12 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const INSTALLED_HOME = '{JEV_HOME}';
+// Jev's SDK does not work under Bun (opencode's runtime), so lib.mjs makes the call in this Node binary.
+const INSTALLED_NODE = '{NODE}';
 
 export const JevPlugin = async ({ directory }) => {
   if (process.env.JEV_HOOK === '0') return {};
+  if (!process.env.JEV_NODE && !INSTALLED_NODE.startsWith('{')) process.env.JEV_NODE = INSTALLED_NODE;
   const home = process.env.JEV_HOME || (INSTALLED_HOME.startsWith('{') ? join(homedir(), '.agents', 'tools', 'jev') : INSTALLED_HOME);
   const base = pathToFileURL(home.replace(/\\/g, '/') + '/').href;
   let route, gate;
