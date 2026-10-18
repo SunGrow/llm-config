@@ -1,0 +1,14 @@
+{
+  "id": "devin",
+  "title": "Devin Desktop adapter (formerly Windsurf)",
+  "description": "Compact managed block (about 2.5 KB) in ~/.codeium/windsurf/memories/global_rules.md that fits the 6,000-character global cap and points to ~/.agents for the full rules. Skills come from ~/.agents/skills.",
+  "group": "extras",
+  "requires": ["core"],
+  "default": "detect",
+  "detect": { "commands": ["devin", "windsurf"], "paths": ["{HOME}/.codeium/windsurf"] },
+  "platforms": ["linux", "darwin", "win32"],
+  "postInstall": "Devin Desktop: global_rules.md is limited to 6,000 characters in total; the managed block uses about 2,500, so keep your own text in that file under about 3,400 characters. The block is a compact form of ~/.agents/CORE.md and tells the agent to read the full file before substantive work. Skills are read from ~/.agents/skills. No subagents or hooks are installed; see components/devin/HOOKS.md.",
+  "actions": [
+    { "type": "block", "id": "core", "from": "files/global_rules.block.md", "to": "{HOME}/.codeium/windsurf/memories/global_rules.md" }
+  ]
+}

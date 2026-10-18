@@ -1,0 +1,17 @@
+{
+  "id": "antigravity",
+  "title": "Google Antigravity adapter (App, IDE, agy CLI)",
+  "description": "Always-on global rule ~/.gemini/config/rules/llm-config-core.md that includes ~/.agents/CORE.md natively, skills copied to both Antigravity skill folders, five subagents in ~/.gemini/config/agents. Leaves ~/.gemini/GEMINI.md to the Gemini CLI adapter.",
+  "group": "extras",
+  "requires": ["core"],
+  "default": "detect",
+  "detect": { "commands": ["agy", "antigravity"], "paths": ["{GEMINI_HOME}/config", "{GEMINI_HOME}/antigravity-cli", "{GEMINI_HOME}/antigravity"] },
+  "platforms": ["linux", "darwin", "win32"],
+  "postInstall": "Antigravity: the core rules load through the always_on rule ~/.gemini/config/rules/llm-config-core.md, which the App, IDE and agy CLI all read; Antigravity expands its @[Core rules](~/.agents/CORE.md) include. ~/.gemini/GEMINI.md is left to the Gemini CLI adapter; Antigravity reads that file too, and the rule tells the agent not to load CORE.md twice. Skills are copied to ~/.gemini/config/skills and ~/.gemini/antigravity-cli/skills because Antigravity does not document ~/.agents/skills. Subagents use only documented tool names (view_file, grep_search, replace_file_content, run_command); no web tool name or read-only flag is documented, so evidence-overseer has no web access and read-only roles rely on their instructions. Check them in a new session; a wrong tool name can make a subagent hang. No hooks are installed; see components/antigravity/HOOKS.md.",
+  "actions": [
+    { "type": "copy", "from": "files/llm-config-core.md", "to": "{GEMINI_HOME}/config/rules/llm-config-core.md" },
+    { "type": "copy", "from": "../skills/files/", "to": "{GEMINI_HOME}/config/skills/", "when": "skills" },
+    { "type": "copy", "from": "../skills/files/", "to": "{GEMINI_HOME}/antigravity-cli/skills/", "when": "skills" },
+    { "type": "copy", "from": "files/agents/", "to": "{GEMINI_HOME}/config/agents/" }
+  ]
+}

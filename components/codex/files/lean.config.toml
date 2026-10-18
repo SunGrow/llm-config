@@ -1,0 +1,12 @@
+# Optional Codex profile, used only when you run `codex --profile lean`.
+# Codex loads config.toml first, then overlays this file (top-level keys, no [profiles.*] table).
+# Your config.toml is never modified by this installer.
+
+model_reasoning_effort = "medium"
+plan_mode_reasoning_effort = "high"
+model_reasoning_summary = "concise"
+model_verbosity = "low"
+
+[memories]
+generate_memories = false
+use_memories = false

@@ -1,0 +1,16 @@
+{
+  "id": "codex",
+  "title": "Codex CLI adapter",
+  "description": "Managed block in ~/.codex/AGENTS.md (core rules inline, explicit routing to ~/.agents), five custom agents, optional 'lean' profile file. Never touches config.toml.",
+  "group": "tools",
+  "requires": ["core"],
+  "default": "detect",
+  "detect": { "commands": ["codex"], "paths": ["{CODEX_HOME}"] },
+  "platforms": ["linux", "darwin", "win32"],
+  "postInstall": "Codex: start a new session to load ~/.codex/AGENTS.md. Custom agents are in ~/.codex/agents/ and inherit your model; add model = \"<id>\" per file to route strong vs small models. Codex delegates when you ask or when AGENTS.md/skill instructions request it; naming the role helps (for example: 'use claim_verifier on these claims').Optional profile: codex --profile lean (medium effort, concise summaries, low verbosity, memories off). Your config.toml was not changed.",
+  "actions": [
+    { "type": "block", "id": "core", "from": "files/AGENTS.block.md.tmpl", "to": "{CODEX_HOME}/AGENTS.md" },
+    { "type": "copy", "from": "files/agents/", "to": "{CODEX_HOME}/agents/" },
+    { "type": "copy", "from": "files/lean.config.toml", "to": "{CODEX_HOME}/lean.config.toml" }
+  ]
+}

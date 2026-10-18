@@ -1,0 +1,7 @@
+{{include:../core/files/CORE.md}}
+
+## Codex
+
+- Codex does not expand file imports. The rules above are the content of `~/.agents/CORE.md`; do not re-read it. Before file writes, multi-step tool work, delegation, or current-fact research, open `~/.agents/ROUTER.md` with a read command, then only the packs it selects in `~/.agents/instructions/`. If a file is missing, continue with this block and say so.
+- Skills live in `~/.agents/skills/`. Use `verify-claims` before treating a report as fact or committing.
+- Custom agents in `~/.codex/agents/`: `heavy_output_runner` (bulky read-only evidence), `step_runner` (one briefed step), `project_explorer` (project map), `claim_verifier` and `evidence_overseer` (verification). When spawning, choose the model per role: strongest model and high effort for verification, a mid setting for a briefed step, a small fast model for sweeps.

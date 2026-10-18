@@ -1,0 +1,14 @@
+{
+  "id": "gemini",
+  "title": "Gemini CLI adapter",
+  "description": "Managed block in ~/.gemini/GEMINI.md that imports ~/.agents/CORE.md and routes to ROUTER.md just in time. Skills come from ~/.agents/skills.",
+  "group": "extras",
+  "requires": ["core"],
+  "default": "detect",
+  "detect": { "commands": ["gemini"], "paths": ["{GEMINI_HOME}"] },
+  "platforms": ["linux", "darwin", "win32"],
+  "postInstall": "Gemini CLI: in a new session ask which 'Core rules' are loaded to confirm the @import of ~/.agents/CORE.md resolved; Gemini CLI restricts imports to allowed directories, and the block tells the agent to read the file itself if the import was blocked. No subagent files are installed for Gemini CLI.",
+  "actions": [
+    { "type": "block", "id": "core", "from": "files/GEMINI.block.md.tmpl", "to": "{GEMINI_HOME}/GEMINI.md" }
+  ]
+}

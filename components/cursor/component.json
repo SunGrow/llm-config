@@ -1,0 +1,16 @@
+{
+  "id": "cursor",
+  "title": "Cursor adapter",
+  "description": "Paste-ready user rules file (core rules inline), five subagents in ~/.cursor/agents unless Claude Code or Codex agents are installed, CLI commit/PR attribution off only where unset. Skills come from ~/.agents/skills.",
+  "group": "tools",
+  "requires": ["core"],
+  "default": "detect",
+  "detect": { "commands": ["cursor", "cursor-agent"], "paths": ["{CURSOR_HOME}"] },
+  "platforms": ["linux", "darwin", "win32"],
+  "postInstall": "Cursor: user rules exist only in the app (Customize > Rules), so paste the contents of ~/.cursor/llm-config/user-rules.md there yourself; nothing is applied automatically. Cursor reads subagents from ~/.cursor/agents, ~/.claude/agents and ~/.codex/agents, so the Cursor copies are installed only when neither Claude Code nor Codex is selected (needs installer support for 'unless'). Skills: ~/.agents/skills, plus ~/.claude/skills and ~/.codex/skills if present, which can duplicate names. cli-config.json gets attribution.attributeCommitsToAgent and attributePRsToAgent = false only where those keys are absent; if you already set them to true they stay true, so change them yourself to drop the 'Made with Cursor' trailer and footer. No hooks are installed; see components/cursor/HOOKS.md.",
+  "actions": [
+    { "type": "copy", "from": "files/user-rules.md.tmpl", "to": "{CURSOR_HOME}/llm-config/user-rules.md" },
+    { "type": "copy", "from": "files/agents/", "to": "{CURSOR_HOME}/agents/", "unless": ["claude", "codex"] },
+    { "type": "json-merge", "from": "files/cli-config.fragment.json", "to": "{CURSOR_CLI_HOME}/cli-config.json" }
+  ]
+}

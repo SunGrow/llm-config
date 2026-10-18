@@ -1,0 +1,72 @@
+// Jev for opencode (plugin API v1, @opencode-ai/plugin; loaded from the global plugins/ folder).
+// Installed by llm-config component "jev"; the decision logic lives in the shared tool folder (route-core.mjs,
+// gate-core.mjs), which this file imports by absolute path.
+//
+// Routing: chat.message classifies the user's text and keeps the advisory note for that session;
+//   experimental.chat.system.transform appends it to the system prompt of every model call until the next
+//   user message. experimental.text.complete remembers the last assistant text as context for the next routing.
+// Gate: tool.execute.before on "bash". opencode has no "ask" result here, and the typed permission.ask hook is
+//   not triggered by opencode's permission service (checked in v1.19.3 source), so a command that needs
+//   confirmation is blocked with an error that tells the agent to ask the user and rerun with `# jev-confirmed`.
+// Opt out: env JEV_HOOK=0, or a file .agents/jev-off or .claude/jev-off in the project. Every failure fails open.
+// Only plugin functions may be exported: opencode treats every export of a plugin module as a plugin.
+import { homedir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const INSTALLED_HOME = '{JEV_HOME}';
+
+export const JevPlugin = async ({ directory }) => {
+  if (process.env.JEV_HOOK === '0') return {};
+  const home = process.env.JEV_HOME || (INSTALLED_HOME.startsWith('{') ? join(homedir(), '.agents', 'tools', 'jev') : INSTALLED_HOME);
+  const base = pathToFileURL(home.replace(/\\/g, '/') + '/').href;
+  let route, gate;
+  try {
+    route = await import(new URL('route-core.mjs', base).href);
+    gate = await import(new URL('gate-core.mjs', base).href);
+  } catch {
+    return {}; // shared tool missing: no hooks
+  }
+  const cwd = directory || process.cwd();
+  const notes = new Map();     // sessionID -> routing note for the current user turn
+  const lastReply = new Map(); // sessionID -> last assistant text
+
+  return {
+    'chat.message': async (input, output) => {
+      try {
+        const sid = input?.sessionID;
+        if (!sid) return;
+        notes.delete(sid);
+        const text = (output?.parts || [])
+          .filter(p => p && p.type === 'text' && !p.synthetic && !p.ignored)
+          .map(p => p.text).join('\n').trim();
+        if (!text) return;
+        const { note } = await route.routeNote({ prompt: text, previousReply: lastReply.get(sid) || '', cwd });
+        if (note) notes.set(sid, note);
+      } catch { /* fail open */ }
+    },
+
+    'experimental.chat.system.transform': async (input, output) => {
+      const note = input?.sessionID && notes.get(input.sessionID);
+      if (note && Array.isArray(output?.system)) output.system.push(note);
+    },
+
+    'experimental.text.complete': async (input, output) => {
+      if (input?.sessionID && output?.text) lastReply.set(input.sessionID, String(output.text).slice(-4000));
+    },
+
+    'tool.execute.before': async (input, output) => {
+      if (input?.tool !== 'bash') return;
+      const command = String(output?.args?.command || '');
+      if (!command || gate.hasConfirmMarker(command)) return;
+      let r;
+      try {
+        const dir = output.args.workdir ? resolve(cwd, String(output.args.workdir)) : cwd;
+        r = await gate.gateDecision({ command, cwd: dir, toolUseId: input.callID ? 'opencode-' + input.callID : undefined, deadline: Date.now() + 10000 });
+      } catch { return; }
+      if (r?.decision === 'ask') {
+        throw new Error(`${r.reason} Blocked until the user confirms: ask the user in chat; only if they explicitly confirm, rerun the same command with \`${gate.CONFIRM_MARKER}\` appended. If they decline, do not retry.`);
+      }
+    },
+  };
+};

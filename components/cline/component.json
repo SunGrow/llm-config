@@ -1,0 +1,15 @@
+{
+  "id": "cline",
+  "title": "Cline adapter",
+  "description": "Global rule ~/.cline/rules/llm-config-core.md (core rules inline, always active) and skills copied to ~/.cline/skills. No subagents.",
+  "group": "extras",
+  "requires": ["core"],
+  "default": "detect",
+  "detect": { "commands": ["cline"], "paths": ["{HOME}/.cline", "{HOME}/Documents/Cline"] },
+  "platforms": ["linux", "darwin", "win32"],
+  "postInstall": "Cline: the core rules are a global rule without front matter in ~/.cline/rules (Cline also searches ~/Documents/Cline/Rules and ~/Cline/Rules; keep only one copy). Cline also reads ~/.agents/AGENTS.md; this adapter does not write it, because the shared core lives in ~/.agents/CORE.md. Skills are copied to ~/.cline/skills because that is the only documented global skill folder. No subagents or hooks are installed; see components/cline/HOOKS.md.",
+  "actions": [
+    { "type": "copy", "from": "files/llm-config-core.md.tmpl", "to": "{HOME}/.cline/rules/llm-config-core.md" },
+    { "type": "copy", "from": "../skills/files/", "to": "{HOME}/.cline/skills/", "when": "skills" }
+  ]
+}

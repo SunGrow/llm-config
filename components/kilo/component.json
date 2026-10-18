@@ -1,0 +1,15 @@
+{
+  "id": "kilo",
+  "title": "Kilo Code adapter",
+  "description": "Managed block in ~/.config/kilo/AGENTS.md (core rules inline, router just in time) and the five opencode-format subagents in ~/.config/kilo/agents. Skills come from ~/.agents/skills.",
+  "group": "extras",
+  "requires": ["core"],
+  "default": "detect",
+  "detect": { "commands": ["kilo"], "paths": ["{KILO_HOME}"] },
+  "platforms": ["linux", "darwin", "win32"],
+  "postInstall": "Kilo Code: start a new session to load ~/.config/kilo/AGENTS.md. Until the Kilo migration runs it also falls back to ~/.claude/CLAUDE.md, so with Claude Code installed the core rules can load twice; run the migration or check which global files are loaded. Subagents (mode: subagent, edit denied for read-only roles) inherit the calling model; add model: provider/id per file in ~/.config/kilo/agents/. Skills: ~/.agents/skills, plus ~/.claude/skills when Claude Code compatibility is on, which can duplicate names. No hooks are installed; see components/kilo/HOOKS.md.",
+  "actions": [
+    { "type": "block", "id": "core", "from": "files/AGENTS.block.md.tmpl", "to": "{KILO_HOME}/AGENTS.md" },
+    { "type": "copy", "from": "../opencode/files/agents/", "to": "{KILO_HOME}/agents/" }
+  ]
+}

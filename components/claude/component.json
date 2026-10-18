@@ -1,0 +1,16 @@
+{
+  "id": "claude",
+  "title": "Claude Code adapter",
+  "description": "Managed block in ~/.claude/CLAUDE.md (core rules inline, router just in time), five role subagents with explicit models, attribution off in settings.json.",
+  "group": "tools",
+  "requires": ["core"],
+  "default": "detect",
+  "detect": { "commands": ["claude"], "paths": ["{CLAUDE_HOME}"] },
+  "platforms": ["linux", "darwin", "win32"],
+  "postInstall": "Claude Code: restart sessions to load the CLAUDE.md block and agents (check with /context and /agents). settings.json gets attribution.commit/pr = \"\" and sessionUrl = false only where you had not set them; nothing else, no permission changes. Agents use the sonnet/opus/haiku aliases; edit the model line in ~/.claude/agents/*.md if your plan lacks one.",
+  "actions": [
+    { "type": "block", "id": "core", "from": "files/CLAUDE.block.md.tmpl", "to": "{CLAUDE_HOME}/CLAUDE.md" },
+    { "type": "copy", "from": "files/agents/", "to": "{CLAUDE_HOME}/agents/" },
+    { "type": "json-merge", "from": "files/settings.fragment.json", "to": "{CLAUDE_HOME}/settings.json" }
+  ]
+}

@@ -1,0 +1,1 @@
+- Jev decision model (`jev` skill): hooks add an advisory "Jev routing note" to prompts and check git commit/push and destructive shell commands before they run (asking or blocking on high risk). Treat both as hints, never as evidence; if the user declines a gated command, do not retry it. If Jev errors, continue without it.

@@ -1,0 +1,16 @@
+{
+  "id": "kiro",
+  "title": "Kiro adapter",
+  "description": "Global steering file ~/.kiro/steering/llm-config-core.md (core rules inline, always included), skills copied to ~/.kiro/skills, five custom agents in ~/.kiro/agents.",
+  "group": "extras",
+  "requires": ["core"],
+  "default": "detect",
+  "detect": { "commands": ["kiro", "kiro-cli"], "paths": ["{KIRO_HOME}"] },
+  "platforms": ["linux", "darwin", "win32"],
+  "postInstall": "Kiro: the core rules are a global steering file without front matter (inclusion defaults to always) in ~/.kiro/steering, or under KIRO_HOME if set. Skills are copied to ~/.kiro/skills because Kiro does not document ~/.agents/skills. Agents in ~/.kiro/agents use Markdown front matter with tools read/write/shell and no model line; no web tool name is documented, so evidence-overseer works from local sources only. Check the agents with your Kiro version. No hooks are installed; see components/kiro/HOOKS.md.",
+  "actions": [
+    { "type": "copy", "from": "files/llm-config-core.md.tmpl", "to": "{KIRO_HOME}/steering/llm-config-core.md" },
+    { "type": "copy", "from": "../skills/files/", "to": "{KIRO_HOME}/skills/", "when": "skills" },
+    { "type": "copy", "from": "files/agents/", "to": "{KIRO_HOME}/agents/" }
+  ]
+}

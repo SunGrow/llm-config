@@ -1,0 +1,15 @@
+{
+  "id": "core",
+  "title": "Core rules (shared)",
+  "description": "Tool-agnostic accuracy and token rules in ~/.agents: CORE.md (always on via adapters), ROUTER.md and just-in-time instruction packs.",
+  "group": "base",
+  "requires": [],
+  "default": true,
+  "platforms": ["linux", "darwin", "win32"],
+  "postInstall": "Shared rules installed in ~/.agents (CORE.md, ROUTER.md, instructions/). Tool adapters inline CORE.md; edit the adapter blocks, not only CORE.md, if you change the always-on text.",
+  "actions": [
+    { "type": "copy", "from": "files/CORE.md", "to": "{AGENTS_HOME}/CORE.md" },
+    { "type": "copy", "from": "files/ROUTER.md", "to": "{AGENTS_HOME}/ROUTER.md" },
+    { "type": "copy", "from": "files/instructions/", "to": "{AGENTS_HOME}/instructions/" }
+  ]
+}

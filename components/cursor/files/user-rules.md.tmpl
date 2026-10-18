@@ -1,0 +1,7 @@
+{{include:../core/files/CORE.md}}
+
+## Cursor
+
+- The rules above are the content of `~/.agents/CORE.md`; do not re-read it. Before file writes, multi-step tool work, delegation, or current-fact research, read `~/.agents/ROUTER.md`, then only the packs it selects in `~/.agents/instructions/`. If a file is missing, continue with these rules and say so.
+- Skills load from `~/.agents/skills/`. Use `verify-claims` before treating a report as fact or committing.
+- Subagents: `heavy-output-runner` (bulky read-only evidence), `step-runner` (one briefed step), `project-explorer` (project map), `claim-verifier` and `evidence-overseer` (verification). They default to `model: inherit`; set a model per file to route strong models to verification and small ones to sweeps.

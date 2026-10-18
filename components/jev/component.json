@@ -1,0 +1,92 @@
+{
+  "id": "jev",
+  "title": "Jev decision model (routing note + command gate)",
+  "description": "Advisory routing note on each prompt and a confirm-before-risky-git/rm gate, via the Jev classifier on OpenRouter; for Claude Code, Codex CLI and opencode.",
+  "group": "extras",
+  "default": false,
+  "platforms": [
+    "linux",
+    "darwin",
+    "win32"
+  ],
+  "requiresBinaries": [
+    "node"
+  ],
+  "postInstall": "Jev: store your OpenRouter key without echoing it, either as env OPENROUTER_API_KEY or in a key file: mkdir -p ~/.config/jev && printf %s \"$KEY\" > ~/.config/jev/key && chmod 600 ~/.config/jev/key (respects $XDG_CONFIG_HOME; on Windows a user env var also works). Without a key the hooks stay silent. Opt out: env JEV_HOOK=0 everywhere, or a file .agents/jev-off (or .claude/jev-off) in a project. Cost: about $0.0001 per call (one per routed prompt and per gated git/destructive command). Privacy: the prompt, the tail of the previous reply and, for the gate, the command plus git diff/log output are sent to OpenRouter after secret redaction; the local log keeps only hashes. Claude Code: the gate asks natively. Codex: open /hooks in Codex and trust the two new Jev hooks (new hooks are skipped until reviewed), and restart Codex to load rules/jev-guard.rules; a blocked command must be confirmed by you in chat, then rerun with '# jev-confirmed' appended. opencode: restart it to load plugins/jev.js; same confirm-and-rerun flow.",
+  "actions": [
+    {
+      "type": "copy",
+      "from": "tool/",
+      "to": "{JEV_HOME}/"
+    },
+    {
+      "type": "npm-install",
+      "dir": "{JEV_HOME}"
+    },
+    {
+      "type": "copy",
+      "from": "SKILL.md.tmpl",
+      "to": "{AGENTS_HOME}/skills/jev/SKILL.md"
+    },
+    {
+      "type": "copy",
+      "from": "SKILL.md.tmpl",
+      "to": "{CLAUDE_HOME}/skills/jev/SKILL.md",
+      "when": "claude"
+    },
+    {
+      "type": "json-merge",
+      "from": "claude/settings.hooks.json.tmpl",
+      "to": "{CLAUDE_HOME}/settings.json",
+      "when": "claude"
+    },
+    {
+      "type": "json-merge",
+      "from": "claude/settings.hooks.win32.json.tmpl",
+      "to": "{CLAUDE_HOME}/settings.json",
+      "when": "claude",
+      "platforms": [
+        "win32"
+      ]
+    },
+    {
+      "type": "json-merge",
+      "from": "codex/hooks.json.tmpl",
+      "to": "{CODEX_HOME}/hooks.json",
+      "when": "codex"
+    },
+    {
+      "type": "copy",
+      "from": "codex/jev-guard.rules",
+      "to": "{CODEX_HOME}/rules/jev-guard.rules",
+      "when": "codex"
+    },
+    {
+      "type": "copy",
+      "from": "opencode/jev.js.tmpl",
+      "to": "{OPENCODE_HOME}/plugins/jev.js",
+      "when": "opencode"
+    },
+    {
+      "type": "block",
+      "id": "jev",
+      "from": "AGENTS.jev.md",
+      "to": "{CLAUDE_HOME}/CLAUDE.md",
+      "when": "claude"
+    },
+    {
+      "type": "block",
+      "id": "jev",
+      "from": "AGENTS.jev.md",
+      "to": "{CODEX_HOME}/AGENTS.md",
+      "when": "codex"
+    },
+    {
+      "type": "block",
+      "id": "jev",
+      "from": "AGENTS.jev.md",
+      "to": "{OPENCODE_HOME}/AGENTS.md",
+      "when": "opencode"
+    }
+  ]
+}

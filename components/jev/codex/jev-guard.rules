@@ -1,0 +1,48 @@
+# Jev guard (llm-config component "jev"): Codex asks before these always-dangerous commands.
+# Rules match exact leading tokens; forms they miss (git -C dir ..., flags after the remote, PowerShell) are
+# handled by the Jev PreToolUse hook in hooks.json. Keep in sync with CODEX_RULE_PREFIXES in tool/gate-core.mjs.
+
+prefix_rule(
+    pattern = ["git", "reset", "--hard"],
+    decision = "prompt",
+    justification = "Jev guard: git reset --hard discards uncommitted work",
+    match = ["git reset --hard", "git reset --hard HEAD~1"],
+    not_match = ["git reset --soft HEAD~1"],
+)
+
+prefix_rule(
+    pattern = ["git", "clean", ["-f", "-fd", "-df", "-fx", "-xf", "-fdx", "-fxd", "-dfx", "-xfd", "-xdf", "-dxf", "-ff", "-ffd", "-ffdx", "--force"]],
+    decision = "prompt",
+    justification = "Jev guard: git clean -f deletes untracked files",
+    match = ["git clean -fd", "git clean -fdx", "git clean --force"],
+    not_match = ["git clean -n"],
+)
+
+prefix_rule(
+    pattern = ["git", "push", ["--force", "-f", "--force-with-lease", "--mirror"]],
+    decision = "prompt",
+    justification = "Jev guard: force-push rewrites remote history",
+    match = ["git push --force origin main", "git push -f"],
+    not_match = ["git push origin main"],
+)
+
+prefix_rule(
+    pattern = ["git", "stash", "clear"],
+    decision = "prompt",
+    justification = "Jev guard: git stash clear drops every stash",
+)
+
+prefix_rule(
+    pattern = ["git", ["filter-branch", "filter-repo"]],
+    decision = "prompt",
+    justification = "Jev guard: history rewrite",
+    match = ["git filter-branch --tree-filter x HEAD", "git filter-repo --path x"],
+)
+
+prefix_rule(
+    pattern = ["rm", ["-rf", "-fr", "-r", "-R", "-Rf", "-fR", "--recursive"]],
+    decision = "prompt",
+    justification = "Jev guard: recursive delete",
+    match = ["rm -rf build", "rm -r dir"],
+    not_match = ["rm file.txt", "rm -f file.txt"],
+)

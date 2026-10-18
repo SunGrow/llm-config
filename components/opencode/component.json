@@ -1,0 +1,15 @@
+{
+  "id": "opencode",
+  "title": "opencode adapter",
+  "description": "Managed block in ~/.config/opencode/AGENTS.md (core rules inline, router just in time) and five subagents (mode: subagent, inherit the calling model).",
+  "group": "tools",
+  "requires": ["core"],
+  "default": "detect",
+  "detect": { "commands": ["opencode"], "paths": ["{OPENCODE_HOME}"] },
+  "platforms": ["linux", "darwin", "win32"],
+  "postInstall": "opencode: the global AGENTS.md now exists, so opencode stops falling back to ~/.claude/CLAUDE.md (no double rules). Skills are read from ~/.agents/skills; if Claude Code is also installed the same skills exist in ~/.claude/skills too, and opencode's docs only say names must be unique across locations. To avoid duplicates, add to your shell profile: export OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1 (this also hides project .claude/skills). Subagents inherit the calling model; add model: provider/id to ~/.config/opencode/agents/*.md to route roles.",
+  "actions": [
+    { "type": "block", "id": "core", "from": "files/AGENTS.block.md.tmpl", "to": "{OPENCODE_HOME}/AGENTS.md" },
+    { "type": "copy", "from": "files/agents/", "to": "{OPENCODE_HOME}/agents/" }
+  ]
+}

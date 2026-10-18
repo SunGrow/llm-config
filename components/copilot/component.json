@@ -1,0 +1,15 @@
+{
+  "id": "copilot",
+  "title": "GitHub Copilot adapter (CLI, VS Code)",
+  "description": "Managed block in ~/.copilot/copilot-instructions.md (core rules inline, router just in time) and five custom agents in ~/.copilot/agents. Skills come from ~/.agents/skills.",
+  "group": "tools",
+  "requires": ["core"],
+  "default": "detect",
+  "detect": { "commands": ["copilot"], "paths": ["{COPILOT_HOME}"] },
+  "platforms": ["linux", "darwin", "win32"],
+  "postInstall": "GitHub Copilot: start a new copilot session to load ~/.copilot/copilot-instructions.md (COPILOT_HOME moves the whole folder). The core rules are inlined, not imported. Custom agents are ~/.copilot/agents/*.agent.md with tools read/search/execute/edit/web and no model line, so they inherit your model; add model: <name> per file to route roles. VS Code also reads ~/.claude/agents, so with Claude Code installed each role may appear twice there. No hooks are installed; see components/copilot/HOOKS.md.",
+  "actions": [
+    { "type": "block", "id": "core", "from": "files/copilot-instructions.block.md.tmpl", "to": "{COPILOT_HOME}/copilot-instructions.md" },
+    { "type": "copy", "from": "files/agents/", "to": "{COPILOT_HOME}/agents/" }
+  ]
+}

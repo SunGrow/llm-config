@@ -1,0 +1,14 @@
+{
+  "id": "skills",
+  "title": "Shared skills",
+  "description": "verify-claims, code-research (model-invocable) and task-start / task-continue / handoff (user-invoked task notes in .agent-work/).",
+  "group": "base",
+  "requires": ["core"],
+  "default": true,
+  "platforms": ["linux", "darwin", "win32"],
+  "postInstall": "Skills installed in ~/.agents/skills (Codex, opencode, Gemini CLI) and, with Claude Code selected, in ~/.claude/skills. task-start / task-continue / handoff are user-invoked: run them by name (in Claude Code /task-start <id> <goal>). They keep notes in <repo>/.agent-work/; add .agent-work/ to .git/info/exclude or your global gitignore if you do not want them tracked.",
+  "actions": [
+    { "type": "copy", "from": "files/", "to": "{AGENTS_HOME}/skills/" },
+    { "type": "copy", "from": "files/", "to": "{CLAUDE_HOME}/skills/", "when": "claude" }
+  ]
+}

@@ -1,0 +1,72 @@
+---
+name: jev
+description: >-
+  Fast typed decisions (yes/no probability, pick-one, rubric score) from the Jev
+  decision model via OpenRouter, ~0.6-1.5 s and a fraction of a cent per call.
+  Prompt routing and the commit/destructive-command risk gate run automatically via
+  hooks (Claude Code, Codex) or a plugin (opencode). Call it yourself for custom
+  yes/no, pick-one or score questions over text (e.g. triaging many review findings,
+  or risk-checking a migration). Not for generating text or code, and never as
+  proof of a fact.
+---
+
+# jev: typed decisions
+
+Jev answers typed questions about a `state` string. It does not generate prose and it does not verify facts: a confident answer can still be wrong. Use it to decide **which** check or route to take, then do the check.
+
+```bash
+node "{JEV_HOME}/jev.mjs" preset <name> < state.txt
+node "{JEV_HOME}/jev.mjs" ask < request.json
+```
+
+Pipe the state on stdin (for example `git diff --cached | node "{JEV_HOME}/jev.mjs" preset diff_risk`). Output is one JSON line: `{"ok":true,"answers":{...},"ms":...}`. On `"ok":false`, continue without Jev and say so; do not retry in a loop.
+
+## API key
+
+Looked up in this order: env `OPENROUTER_API_KEY`, then the key file `$XDG_CONFIG_HOME/jev/key` (default `~/.config/jev/key`, trimmed; keep it `chmod 600`, a group/world-readable file gets a warning on stderr), then on Windows the user environment in the registry. Without a key every call returns `ok:false` and the hooks stay silent.
+
+## Automatic hooks
+
+| | Claude Code | Codex CLI | opencode |
+|---|---|---|---|
+| Routing note on each user prompt | UserPromptSubmit hook (skipped for subagents and headless `claude -p`/SDK runs unless `JEV_ROUTE_HEADLESS=1`) | UserPromptSubmit hook (plain stdout becomes developer context) | plugin: `chat.message` + `experimental.chat.system.transform` |
+| Hard list (always confirm) | asks (PreToolUse `ask`) | execpolicy rule `prompt` (`rules/jev-guard.rules`); forms the prefix rules miss are blocked by the PreToolUse hook | blocks the bash call |
+| Jev diff_risk on commit/push/destructive | asks on threshold | off by default; `JEV_CODEX_RISK=1` blocks on threshold | blocks on threshold |
+
+Codex and opencode cannot ask from a pre-tool hook, so a blocked command comes back with a message: ask the user in chat, and only after an explicit yes rerun the same command with `# jev-confirmed` appended (a shell comment, so the command is unchanged). Never add the marker on your own.
+
+## Presets (`presets.json` next to the CLI)
+
+| Preset | State | Use when | Act on |
+|---|---|---|---|
+| `route` | previous reply tail + user prompt | automatic: prompt hook / plugin | read the injected note as a hint |
+| `diff_risk` | command + staged diff | automatic: pre-tool gate on git commit/push, reset --hard, clean -f, branch -D, checkout/restore of files, stash drop/clear, rm -r / Remove-Item -Recurse | confirmation on secrets ≥ 0.8, destructive ≥ 0.6 or severity ≥ 2.75, and always (without Jev) on reset --hard, clean -f, stash clear, history rewrites, force-push to main/master/release (also with no refspec while on such a branch), and rm -r of .git, a drive root, home or `*` outside the temp folder; run it manually for migrations or other risky changes |
+| `finding_severity` | one review finding | triaging 5+ findings | sort by `severity.score` |
+| `evidence_check` | your draft conclusion + citations | optional, before a long report | low precision on real replies: use only as a prompt to re-read, never as a verdict |
+| `model_tier` | subagent brief | rarely | unreliable on real briefs; do not let it override an agent's defined model |
+
+## Custom questions (`ask`)
+
+```json
+{"state": "<text or JSON>",
+ "questions": {
+   "name1": {"type": "noul",   "instructions": "Yes/no question?"},
+   "name2": {"type": "choice", "instructions": "Which fits?", "criteria": {"a": "desc", "b": "desc"}},
+   "name3": {"type": "score",  "instructions": "Rate it.", "criteria": ["level 0", "level 1", "level 2"]}
+ }}
+```
+
+Several questions in one call cost about the same as one. Answers: noul → `{yes, p}`, choice → `{choice, confidence, probabilities}`, score → `{score, confidence}`.
+
+## Opt-out, cost, privacy
+
+- Off for everything: env `JEV_HOOK=0`. Off for one project: create `.agents/jev-off` (or `.claude/jev-off`) in its root.
+- Cost: about $0.0001 per call or less; one call per routed prompt and per gated git/destructive command.
+- Privacy: the prompt, the tail of the previous assistant reply and, for the gate, the command plus `git diff`/`git log` output are sent to OpenRouter/TypeSafe after obvious secrets are redacted. The local log (`{JEV_HOME}/logs/decisions.jsonl`, rotated at 5 MB) keeps only a hash and the length of each state.
+
+## Rules
+
+- A Jev answer is a heuristic. It may select a route; it never counts as evidence.
+- Below the thresholds above, ignore the answer and use your own judgment.
+- If the user declines a command the gate asked about, do not retry it.
+- Model defaults to `typesafe/jev-1.14` (TypeSafe's preview build), falling back to `typesafe/jev-1.13` (stable) if it fails or is withdrawn. State works best as a JSON object with descriptive field names (docs.typesafe.ai).

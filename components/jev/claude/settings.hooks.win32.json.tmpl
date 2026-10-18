@@ -1,0 +1,83 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "PowerShell(git *)",
+            "command": "{NODE}",
+            "args": [
+              "{JEV_HOME}/gate-hook.mjs"
+            ],
+            "timeout": 12
+          },
+          {
+            "type": "command",
+            "if": "PowerShell(Remove-Item *)",
+            "command": "{NODE}",
+            "args": [
+              "{JEV_HOME}/gate-hook.mjs"
+            ],
+            "timeout": 12
+          },
+          {
+            "type": "command",
+            "if": "PowerShell(ri *)",
+            "command": "{NODE}",
+            "args": [
+              "{JEV_HOME}/gate-hook.mjs"
+            ],
+            "timeout": 12
+          },
+          {
+            "type": "command",
+            "if": "PowerShell(rm *)",
+            "command": "{NODE}",
+            "args": [
+              "{JEV_HOME}/gate-hook.mjs"
+            ],
+            "timeout": 12
+          },
+          {
+            "type": "command",
+            "if": "PowerShell(del *)",
+            "command": "{NODE}",
+            "args": [
+              "{JEV_HOME}/gate-hook.mjs"
+            ],
+            "timeout": 12
+          },
+          {
+            "type": "command",
+            "if": "PowerShell(erase *)",
+            "command": "{NODE}",
+            "args": [
+              "{JEV_HOME}/gate-hook.mjs"
+            ],
+            "timeout": 12
+          },
+          {
+            "type": "command",
+            "if": "PowerShell(rd *)",
+            "command": "{NODE}",
+            "args": [
+              "{JEV_HOME}/gate-hook.mjs"
+            ],
+            "timeout": 12
+          },
+          {
+            "type": "command",
+            "if": "PowerShell(rmdir *)",
+            "command": "{NODE}",
+            "args": [
+              "{JEV_HOME}/gate-hook.mjs"
+            ],
+            "timeout": 12
+          }
+        ]
+      }
+    ]
+  }
+}

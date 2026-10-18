@@ -1,0 +1,139 @@
+{
+  "route": {
+    "description": "Classify the user message (with the tail of the previous assistant reply as context): task kind plus flags for current facts, behavior claims, risk, heavy output. Used by the UserPromptSubmit hook. Evaluated on 26 real prompts, see the Jev report.",
+    "questions": {
+      "kind": {
+        "type": "choice",
+        "instructions": "The state has the user's new message and, if present, the tail of the assistant's previous reply. What is the user's new message asking for?",
+        "criteria": {
+          "debug": "Something is broken or behaves unexpectedly; find the cause or fix it",
+          "implement": "Build or change something new: feature, script, document, integration, commit message",
+          "refactor": "Restructure or rename existing code without changing behavior",
+          "review": "Audit or critique existing code, a diff, a design or a document",
+          "research": "Find out something that needs external or current information: docs, APIs, tools, versions",
+          "config": "Change tooling, settings, hooks, CI, environment or build configuration",
+          "explain": "Answer a question about how something works, without changing anything",
+          "feedback": "React to a result the assistant produced (render, page, output) and ask for it to be improved",
+          "continue": "Approve, choose an option, or tell the assistant to go ahead or continue with work already planned in the conversation",
+          "hold": "Tell the assistant to wait, stop, not do something yet, or that the user will do or check it themselves",
+          "chat": "Thanks, small talk, or a remark that needs no work"
+        }
+      },
+      "needs_current_facts": {
+        "type": "noul",
+        "instructions": "Does a correct answer depend on external facts that may have changed recently or are not in this project: third-party tool or API behavior, library versions, product names, prices?",
+        "criteria": {
+          "true": "Needs a current external source",
+          "false": "Answerable from the project, the conversation, or stable knowledge"
+        }
+      },
+      "behavior_claims": {
+        "type": "noul",
+        "instructions": "Is the user asking the assistant to determine, explain or verify how existing code, data or a running system actually behaves (diagnosis, audit, explanation of a mechanism)?",
+        "criteria": {
+          "true": "The answer is a factual claim about existing behavior that must be checked against source, data or runtime",
+          "false": "The user asks for an edit, a document, a plan, an approval, a hold, or conversation"
+        }
+      },
+      "risky": {
+        "type": "noul",
+        "instructions": "Does the user's new message ask for a destructive, irreversible or outward-facing action: deleting data or files, force-push or history rewrite, migrations, publishing, sending messages, credentials, or global/security configuration?",
+        "criteria": {
+          "true": "Such an action is requested now",
+          "false": "No such action is requested in this message"
+        }
+      },
+      "heavy_output": {
+        "type": "noul",
+        "instructions": "Will doing this require bulky intermediate output that does not need to be quoted verbatim: screenshot or click-through sequences, large dumps or logs, many-file searches, or several parallel agents?",
+        "criteria": {
+          "true": "Bulky intermediate output is likely",
+          "false": "The work is small or the output is the answer itself"
+        }
+      }
+    }
+  },
+  "model_tier": {
+    "description": "Pick the cheapest adequate Claude model for a subagent brief (state = the brief).",
+    "questions": {
+      "tier": {
+        "type": "choice",
+        "instructions": "Which model tier is the cheapest one that can do this delegated step reliably?",
+        "criteria": {
+          "haiku": "Mechanical checklist work: listing, collecting, simple lookups, formatting, sweeping files for a pattern",
+          "sonnet": "One well-briefed implementation or investigation step with clear done-criteria",
+          "opus": "Ambiguous diagnosis, architecture or design judgment, synthesis of conflicting evidence, adversarial verification"
+        }
+      }
+    }
+  },
+  "diff_risk": {
+    "description": "Gate a diff or command before commit/run (state = diff or command text).",
+    "questions": {
+      "secrets_or_auth": {
+        "type": "noul",
+        "instructions": "Does this change add, expose or modify credentials, secrets, tokens, authentication or authorization logic?"
+      },
+      "destructive": {
+        "type": "noul",
+        "instructions": "Does this delete data, drop or rewrite database schema, remove files outside a build directory, rewrite git history or force-push?"
+      },
+      "public_contract": {
+        "type": "noul",
+        "instructions": "Does this change a public API, file format, CLI interface, config schema or other contract that other code depends on?"
+      },
+      "severity": {
+        "type": "score",
+        "instructions": "Overall risk of applying this change without further review.",
+        "criteria": [
+          "trivial: formatting, comments, docs",
+          "low: local, easily reverted",
+          "moderate: behavior change that needs tests",
+          "high: data loss, security or broad breakage possible"
+        ]
+      }
+    }
+  },
+  "evidence_check": {
+    "description": "Before stating a conclusion: is the draft supported by cited evidence? (state = draft report/answer, ideally with its citations).",
+    "questions": {
+      "unsupported_claims": {
+        "type": "noul",
+        "instructions": "Does this text state behavior or facts as certain without citing evidence (file:line, command output, log, dump, source URL)?"
+      },
+      "done_beyond_evidence": {
+        "type": "noul",
+        "instructions": "Does this text claim the task is complete or working at a deeper layer (runtime behavior) than its evidence shows (for example only compiled, only saved, only read)?"
+      },
+      "evidence_quality": {
+        "type": "score",
+        "instructions": "How well is this text grounded in checked evidence?",
+        "criteria": [
+          "none: assertions only",
+          "weak: names, docs or memory as proof",
+          "partial: some claims cited, key ones not",
+          "strong: every material claim cites implementation, output or runtime observation"
+        ]
+      }
+    }
+  },
+  "finding_severity": {
+    "description": "Triage one review finding (state = the finding).",
+    "questions": {
+      "real_defect": {
+        "type": "noul",
+        "instructions": "Does this describe a concrete defect with a specific failing scenario, rather than a style preference or speculation?"
+      },
+      "severity": {
+        "type": "score",
+        "instructions": "Severity of this finding if it is real.",
+        "criteria": [
+          "nit",
+          "minor: edge case or maintainability",
+          "major: incorrect behavior in normal use",
+          "critical: data loss, security hole or crash"
+        ]
+      }
+    }
+  }
+}

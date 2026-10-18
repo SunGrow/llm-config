@@ -1,0 +1,7 @@
+{{include:../core/files/CORE.md}}
+
+## Kiro
+
+- The rules above are the content of `~/.agents/CORE.md`; do not re-read it. Before file writes, multi-step tool work, delegation, or current-fact research, read `~/.agents/ROUTER.md`, then only the packs it selects in `~/.agents/instructions/`. If a file is missing, continue with this file and say so.
+- Skills are installed in `~/.kiro/skills/` (same set as `~/.agents/skills/`). Use `verify-claims` before treating a report as fact or committing.
+- Custom agents in `~/.kiro/agents/`: `heavy-output-runner` (bulky read-only evidence), `step-runner` (one briefed step), `project-explorer` (project map), `claim-verifier` and `evidence-overseer` (verification). Read-only roles rely on their tool list and instructions. Choose the model per role when delegating.

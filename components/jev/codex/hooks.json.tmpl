@@ -1,0 +1,29 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"{NODE}\" \"{JEV_HOME}/codex-route.mjs\"",
+            "timeout": 8,
+            "statusMessage": "Jev routing"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"{NODE}\" \"{JEV_HOME}/codex-gate.mjs\"",
+            "timeout": 12,
+            "statusMessage": "Jev gate"
+          }
+        ]
+      }
+    ]
+  }
+}
