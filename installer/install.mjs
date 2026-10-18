@@ -1043,7 +1043,12 @@ async function handleApiKey(c, vars, opts, prompts, ctx) {
       return 'ok';
     }
     if (v === '3') return 'skip';
-    if (v !== '1') { console.log(red('Type 1, 2 or 3.')); continue; }
+    if (v !== '1') {
+      // A key pasted here was echoed: say so instead of only rejecting the answer.
+      if (v.length >= 16 || (k.prefix && v.startsWith(k.prefix))) console.log(red(`That looks like a key, and this prompt showed it on screen. Choose 1 to paste it hidden; if others could see your screen, replace the key${k.url ? ` (${k.url})` : ''}.`));
+      else console.log(red('Type 1, 2 or 3.'));
+      continue;
+    }
     if (!prompts.raw) { console.log(yellow('Hidden input needs a real terminal here. Choose 2 and write the key file yourself (see the README).')); continue; }
     const secret = await readSecret(`Paste your ${k.name}, then press Enter (Ctrl-C to go back): `);
     if (!secret) continue;
