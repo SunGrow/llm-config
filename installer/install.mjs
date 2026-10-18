@@ -1007,6 +1007,13 @@ function readSecret(q) {
     stdin.resume();
   });
 }
+function savePendingKeys(ctx) {
+  const t = tildeOf(ctx);
+  for (const k of ctx.pendingKeys.splice(0)) {
+    try { saveSecret(k.file, k.secret); console.log(green(`Saved your ${k.name} to ${t(k.file)} (readable only by you).`)); }
+    catch (e) { ctx.failed = true; console.log(red(`failed to save the ${k.name} to ${t(k.file)}: ${e.message}`)); }
+  }
+}
 function saveSecret(file, secret) {
   fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   const tmp = `${file}.llm-config-tmp-${process.pid}`;
@@ -1296,16 +1303,14 @@ async function runInstall(opts, comps, info, manifest, vars, root, prompts) {
   if (!changes.length && !ctx.execs.length) {
     const wrote = writeManifest(`${ctx.stateDir}/manifest.json`, newManifest);
     console.log('\n' + green('Nothing to change: everything is already up to date.') + (wrote ? dim(' (manifest refreshed)') : ''));
+    savePendingKeys(ctx); // a key pasted for an already installed component still has to be saved
     printPost(final);
     return ctx.failed ? 1 : 0;
   }
   if (prompts.interactive && !(await confirm(`\nApply ${changes.length} file change(s) and ${ctx.execs.length} command(s)?`))) { console.log('Aborted.'); return 130; }
 
   const applied = applyAll(ctx);
-  for (const k of ctx.pendingKeys) {
-    try { saveSecret(k.file, k.secret); console.log(green(`Saved your ${k.name} to ${t(k.file)} (readable only by you).`)); }
-    catch (e) { ctx.failed = true; console.log(red(`failed to save the ${k.name} to ${t(k.file)}: ${e.message}`)); }
-  }
+  savePendingKeys(ctx);
   const now = new Date().toISOString();
   const touched = new Set([...applied.filter((c) => c.ok).map((c) => c.owner), ...ctx.execs.filter((e) => e.ok).map((e) => e.owner)]);
   for (const id of touched) if (newComps[id]) newComps[id].updatedAt = now;
