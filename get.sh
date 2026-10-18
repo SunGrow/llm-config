@@ -3,7 +3,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/SunGrow/llm-config/main/get.sh | sh
 #   curl -fsSL https://raw.githubusercontent.com/SunGrow/llm-config/main/get.sh | sh -s -- --yes --components claude,opencode
 # Downloads (or updates) the repository into ~/.llm-config/repo, then runs install.sh there with the given
-# arguments. With no arguments: the interactive picker on a first install, `--update` when something is installed.
+# arguments. Without a selection option (--components, --all, ...): the picker on a first install, `--update` once installed.
 # Environment: LLM_CONFIG_DIR (checkout path), LLM_CONFIG_REPO (git URL), LLM_CONFIG_BRANCH (default main).
 
 set -u
@@ -30,13 +30,13 @@ download_tarball() {
   say "git not found; downloading ${repo%.git} ($branch) as a tarball"
   fetch "${repo%.git}/archive/refs/heads/$branch.tar.gz" | tar -xzf - -C "$tmp" || { rm -rf "$tmp"; die "download or extraction failed"; }
   src=$(find "$tmp" -mindepth 1 -maxdepth 1 -type d | head -n 1)
-  [ -n "$src" ] && [ -f "$src/installer/install.mjs" ] || { rm -rf "$tmp"; die "the downloaded archive has no installer"; }
+  if [ -z "$src" ] || [ ! -f "$src/installer/install.mjs" ]; then rm -rf "$tmp"; die "the downloaded archive has no installer"; fi
   if [ -d "$dest" ]; then
     # keep the private overlay (local/) of an earlier tarball install
     if [ -d "$dest/local" ]; then mv "$dest/local" "$src/local" || { rm -rf "$tmp"; die "cannot carry over $dest/local"; }; fi
     rm -rf "$dest"
   fi
-  mkdir -p "$(dirname "$dest")" && mv "$src" "$dest" || { rm -rf "$tmp"; die "cannot move the files to $dest"; }
+  if ! { mkdir -p "$(dirname "$dest")" && mv "$src" "$dest"; }; then rm -rf "$tmp"; die "cannot move the files to $dest"; fi
   rm -rf "$tmp"
 }
 
@@ -54,7 +54,14 @@ else
   download_tarball
 fi
 
-[ $# -eq 0 ] && [ -f "$HOME/.llm-config/manifest.json" ] && set -- --update
+# Something installed and no selection given (e.g. only --yes): update what is installed.
+selection=no
+for a in "$@"; do
+  case "$a" in
+    --components|--components=*|-c|--all|--update|-u|--uninstall|--uninstall=*|--list|--help|-h) selection=yes ;;
+  esac
+done
+if [ "$selection" = no ] && [ -f "$HOME/.llm-config/manifest.json" ]; then set -- --update "$@"; fi
 
 # Under `curl | sh` stdin is the script itself; give the installer the terminal so the picker and prompts work.
 if [ ! -t 0 ] && (: </dev/tty) 2>/dev/null; then

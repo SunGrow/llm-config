@@ -2,7 +2,7 @@
 #   irm https://raw.githubusercontent.com/SunGrow/llm-config/main/get.ps1 | iex
 #   & ([scriptblock]::Create((irm https://raw.githubusercontent.com/SunGrow/llm-config/main/get.ps1))) --yes --components claude,opencode
 # Downloads (or updates) the repository into ~/.llm-config/repo, then runs install.ps1 there with the given
-# arguments. With no arguments: the interactive picker on a first install, --update when something is installed.
+# arguments. Without a selection option (--components, --all, ...): the picker on a first install, --update once installed.
 # Environment: LLM_CONFIG_DIR (checkout path), LLM_CONFIG_REPO (git URL), LLM_CONFIG_BRANCH (default main).
 # Runs inside a function and never calls `exit`, so `| iex` does not close your shell; the result is in $LASTEXITCODE.
 
@@ -55,7 +55,9 @@ function Invoke-LlmConfigGet {
     }
 
     $installArgs = @($PassArgs | Where-Object { $null -ne $_ })
-    if ($installArgs.Count -eq 0 -and (Test-Path (Join-Path $userHome '.llm-config/manifest.json'))) { $installArgs = @('--update') }
+    # Something installed and no selection given (e.g. only --yes): update what is installed.
+    $selection = @($installArgs | Where-Object { "$_" -match '^(--components(=.*)?|-c|--all|--update|-u|--uninstall(=.*)?|--list|--help|-h)$' }).Count -gt 0
+    if (-not $selection -and (Test-Path (Join-Path $userHome '.llm-config/manifest.json'))) { $installArgs = @('--update') + $installArgs }
     # not captured: the installer needs the real console for its picker
     & (Join-Path $dest 'install.ps1') @installArgs
 }
