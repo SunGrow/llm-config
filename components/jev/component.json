@@ -1,7 +1,7 @@
 {
   "id": "jev",
-  "title": "Jev decision model (routing note + command gate)",
-  "description": "Advisory routing note on each prompt and a confirm-before-risky-git/rm gate, via the Jev classifier on OpenRouter; for Claude Code, Codex CLI and opencode.",
+  "title": "Jev decision model (command gate + routing note)",
+  "description": "Confirm-before-risky-git/rm gate for Claude Code, Codex CLI and opencode, plus an advisory routing note on each prompt in Codex and opencode, via the Jev classifier on OpenRouter. The Claude Code routing note is the separate opt-in component jev-route-claude.",
   "group": "extras",
   "default": false,
   "platforms": [
@@ -13,7 +13,7 @@
     "node"
   ],
   "apiKey": { "name": "OpenRouter API key", "env": "OPENROUTER_API_KEY", "configFile": "jev/key", "prefix": "sk-or-", "url": "https://openrouter.ai/keys", "checkUrl": "https://openrouter.ai/api/v1/key" },
-  "postInstall": "Jev: store your OpenRouter key without echoing it, either as env OPENROUTER_API_KEY or in a key file: mkdir -p ~/.config/jev && printf %s \"$KEY\" > ~/.config/jev/key && chmod 600 ~/.config/jev/key (respects $XDG_CONFIG_HOME; on Windows a user env var also works). Without a key the hooks stay silent. Opt out: env JEV_HOOK=0 everywhere, or a file .agents/jev-off (or .claude/jev-off) in a project. Cost: about $0.0001 per call (one per routed prompt and per gated git/destructive command). Privacy: the prompt, the tail of the previous reply and, for the gate, the command plus git diff/log output are sent to OpenRouter after secret redaction; the local log keeps only hashes. Claude Code: the gate asks natively. Codex: open /hooks in Codex and trust the two new Jev hooks (new hooks are skipped until reviewed), and restart Codex to load rules/jev-guard.rules; a blocked command must be confirmed by you in chat, then rerun with '# jev-confirmed' appended. opencode: restart it to load plugins/jev.js; same confirm-and-rerun flow.",
+  "postInstall": "Jev: store your OpenRouter key without echoing it, either as env OPENROUTER_API_KEY or in a key file: mkdir -p ~/.config/jev && printf %s \"$KEY\" > ~/.config/jev/key && chmod 600 ~/.config/jev/key (respects $XDG_CONFIG_HOME; on Windows a user env var also works). Without a key the hooks stay silent. Opt out: env JEV_HOOK=0 everywhere, or a file .agents/jev-off (or .claude/jev-off) in a project. Cost: about $0.0001 per call (one per routed prompt and per gated git/destructive command). Claude Code gets only the gate; add component jev-route-claude for its routing note. Privacy: the prompt, the tail of the previous reply and, for the gate, the command plus git diff/log output are sent to OpenRouter after secret redaction; the local log keeps only hashes. Claude Code: the gate asks natively. Codex: open /hooks in Codex and trust the two new Jev hooks (new hooks are skipped until reviewed), and restart Codex to load rules/jev-guard.rules; a blocked command must be confirmed by you in chat, then rerun with '# jev-confirmed' appended. opencode: restart it to load plugins/jev.js; same confirm-and-rerun flow.",
   "actions": [
     {
       "type": "copy",

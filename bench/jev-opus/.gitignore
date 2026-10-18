@@ -1,0 +1,4 @@
+results*.jsonl
+pilot.jsonl
+notes.json
+*.log

@@ -1,0 +1,14 @@
+{
+  "id": "jev-route-claude",
+  "title": "Jev routing note in Claude Code (opt-in)",
+  "description": "Adds Jev's advisory routing note to each Claude Code prompt. Off by default: on the Opus/Haiku benchmark (bench/jev-opus) it changed no outcomes and added ~3% tokens and ~1 s per prompt. Codex and opencode get the note from the jev component.",
+  "group": "extras",
+  "requires": ["jev"],
+  "default": false,
+  "platforms": ["linux", "darwin", "win32"],
+  "requiresBinaries": ["node"],
+  "postInstall": "Jev routing note enabled for Claude Code (UserPromptSubmit hook). Start a new Claude Code session to load it. Opt out per project with .claude/jev-off, everywhere with JEV_HOOK=0 (that also turns off the gate).",
+  "actions": [
+    { "type": "json-merge", "from": "settings.route.json.tmpl", "to": "{CLAUDE_HOME}/settings.json", "when": "claude" }
+  ]
+}

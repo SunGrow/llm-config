@@ -3,8 +3,8 @@ name: jev
 description: >-
   Fast typed decisions (yes/no probability, pick-one, rubric score) from the Jev
   decision model via OpenRouter, ~0.6-1.5 s and a fraction of a cent per call.
-  Prompt routing and the commit/destructive-command risk gate run automatically via
-  hooks (Claude Code, Codex) or a plugin (opencode). Call it yourself for custom
+  The commit/destructive-command risk gate runs automatically via hooks (Claude Code,
+  Codex) or a plugin (opencode); prompt routing too in Codex and opencode. Call it yourself for custom
   yes/no, pick-one or score questions over text (e.g. triaging many review findings,
   or risk-checking a migration). Not for generating text or code, and never as
   proof of a fact.
@@ -29,7 +29,7 @@ Looked up in this order: env `OPENROUTER_API_KEY`, then the key file `$XDG_CONFI
 
 | | Claude Code | Codex CLI | opencode |
 |---|---|---|---|
-| Routing note on each user prompt | UserPromptSubmit hook (skipped for subagents and headless `claude -p`/SDK runs unless `JEV_ROUTE_HEADLESS=1`) | UserPromptSubmit hook (plain stdout becomes developer context) | plugin: `chat.message` + `experimental.chat.system.transform` |
+| Routing note on each user prompt | off by default (no outcome gain on the Opus benchmark, `bench/jev-opus`); opt-in component `jev-route-claude` adds the UserPromptSubmit hook (skipped for subagents and headless `claude -p`/SDK runs unless `JEV_ROUTE_HEADLESS=1`) | UserPromptSubmit hook (plain stdout becomes developer context) | plugin: `chat.message` + `experimental.chat.system.transform` |
 | Hard list (always confirm) | asks (PreToolUse `ask`) | execpolicy rule `prompt` (`rules/jev-guard.rules`); forms the prefix rules miss are blocked by the PreToolUse hook | blocks the bash call |
 | Jev diff_risk on commit/push/destructive | asks on threshold | off by default; `JEV_CODEX_RISK=1` blocks on threshold | blocks on threshold |
 

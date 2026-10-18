@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "{NODE}",
+            "args": [
+              "{JEV_HOME}/route-hook.mjs"
+            ],
+            "timeout": 8
+          }
+        ]
+      }
+    ]
+  }
+}
