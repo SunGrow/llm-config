@@ -90,6 +90,10 @@ export function classify(command, cwd, git = mkGit(Date.now() + 10000)) {
       const rec = w.slice(1).some(a => /^-[A-Za-z]*[rR][A-Za-z]*$/.test(a) || /^--?recurse$|^--recursive$/i.test(a) || /^\/s$/i.test(a));
       if (rec || head === 'rd' || head === 'rmdir') {
         const text = w.join(' ');
+        // Every target inside the temp folder (scratch dirs, test homes): not worth a confirmation.
+        // On 16-24.10, 17 of 25 rm asks were such paths. Variables, globs and `*` stay gated.
+        const targets = w.slice(1).filter(a => !a.startsWith('-') && !/^\/s$|^\/q$/i.test(a));
+        if (targets.length && targets.every(a => !/[$*?%~]/.test(a) && isInside(resolve(dir, a), tmpdir()))) continue;
         found.destructive.push(text);
         // Always ask for: this folder's own .git (a nested scaffold's .git goes to Jev), a drive or filesystem
         // root, home, or `*` outside the temp folder.
@@ -142,6 +146,13 @@ export function firstRunFor(id, command = '') {
   } catch (e) { return e?.code !== 'EEXIST'; }
 }
 
+const SECRET_FILE = /(^|[\\/\s])(\.env[\w.-]*|[\w.-]*(secret|credential|passw|token|apikey|api_key|private[_-]?key|auth)[\w.-]*|id_(rsa|ed25519)[\w.-]*|[\w.-]+\.(pem|key|p12|pfx|keystore))(\s|\||$)/im;
+export function secretEvidence(state) {
+  const diff = String(state.diff || '');
+  if (/\[REDACTED/.test(diff) || (diff && redact(diff) !== diff)) return true; // state.diff is already redacted by cut()
+  return SECRET_FILE.test([state.diff_stat, state.untracked_files, state.unpushed_stat].filter(Boolean).join('\n'));
+}
+
 export const hardReason = (text) => `Jev gate: high-impact command (${text.slice(0, 120)}). Confirm only if this is intended.`;
 
 // Returns { decision: 'ask'|null, level: 'hard'|'risk'|null, reason, found? }.
@@ -187,7 +198,9 @@ export async function gateDecision({ command, cwd, toolUseId, deadline = Date.no
     const r = await runPreset('diff_risk', state, opts);
     if (!r.ok) return { ...none, found: f };
     const a = r.answers, hits = [];
-    if (a.secrets_or_auth?.p >= ASK.secrets_or_auth) hits.push(`touches secrets/auth (p=${a.secrets_or_auth.p})`);
+    // Jev's secrets flag alone was a false positive on 5 of 8 commit asks (16-24.10): also require a secret-like
+    // value in the diff (the redaction patterns fire) or a secret-like file name in the change.
+    if (a.secrets_or_auth?.p >= ASK.secrets_or_auth && secretEvidence(state)) hits.push(`touches secrets/auth (p=${a.secrets_or_auth.p})`);
     if (a.destructive?.p >= ASK.destructive) hits.push(`destructive (p=${a.destructive.p})`);
     if (a.severity?.score >= ASK.severity) hits.push(`risk severity ${a.severity.score}/3`);
     if (!hits.length) return { ...none, found: f };

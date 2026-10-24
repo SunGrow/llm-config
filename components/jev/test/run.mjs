@@ -121,6 +121,10 @@ group('classify');
 // ---------------------------------------------------------------- route core
 group('route-core');
 {
+  eq(route.formatNote({ kind: { choice: 'implement', confidence: 0.82 } }), null, 'implement below its 0.85 bar: no note');
+  ok(route.formatNote({ kind: { choice: 'implement', confidence: 0.9 } })?.includes('implementation:'), 'implement at 0.9: note');
+  ok(route.formatNote({ kind: { choice: 'debug', confidence: 0.65 } })?.includes('debugging:'), 'debug keeps the 0.6 bar');
+  eq(route.formatNote({ behavior_claims: { p: 0.8 } }), null, 'behavior_claims below 0.85: no note');
   eq(route.skipPrompt('short'), 'short', 'short prompt skipped');
   eq(route.skipPrompt('/compact please keep the important parts of it'), 'slash-command', 'slash command skipped');
   eq(route.skipPrompt('<task-notification>agent finished its work and reported</task-notification>'), 'harness', 'harness message skipped');
@@ -186,8 +190,16 @@ group('gate-core');
   eq((await gate.gateDecision({ command: 'git commit -m x', cwd: repo })).decision, null, 'commit offline: fail open');
   eq((await gate.gateDecision({ command: 'git commit -m x', cwd: repo, hardOnly: true })).decision, null, 'hardOnly skips Jev');
   process.env.JEV_TEST_ANSWERS = JSON.stringify({ secrets_or_auth: { p: 0.9 }, destructive: { p: 0.1 }, severity: { score: 1 } });
+  eq((await gate.gateDecision({ command: 'git commit -m x', cwd: repo })).decision, null, 'secrets flag without secret-like content: no ask');
+  writeFileSync(join(repo, 'conf.txt'), 'api_key = ' + 'abcd1234efgh5678ijkl\n'); g('add', 'conf.txt');
   const risk = await gate.gateDecision({ command: 'git commit -m x', cwd: repo });
-  ok(risk.decision === 'ask' && risk.level === 'risk' && risk.reason.includes('secrets/auth'), 'risk over threshold asks', JSON.stringify(risk));
+  ok(risk.decision === 'ask' && risk.level === 'risk' && risk.reason.includes('secrets/auth'), 'risk over threshold asks (secret-like value staged)', JSON.stringify(risk));
+  g('rm', '-q', '--cached', 'conf.txt');
+  ok(gate.secretEvidence({ diff_stat: ' .env.local | 2 +' }) && gate.secretEvidence({ untracked_files: 'keys/server.pem' }) && !gate.secretEvidence({ diff_stat: ' src/main.js | 3 +' }), 'secret-like file names count as evidence');
+  { const t = join(tmpdir(), 'jev-scratch-x');
+    eq(gate.classify(`rm -rf ${t}`, repo).destructive.length, 0, 'rm -r inside the temp folder is not gated');
+    eq(gate.classify('rm -rf $TMP/x', repo).destructive.length, 1, 'rm -r with a variable target stays gated');
+    eq(gate.classify(`rm -rf ${t} ${process.platform === 'win32' ? 'D:/data' : '/srv/data'}`, repo).destructive.length, 1, 'rm -r with any target outside temp stays gated'); }
   process.env.JEV_TEST_ANSWERS = JSON.stringify({ secrets_or_auth: { p: 0.79 }, destructive: { p: 0.59 }, severity: { score: 2.74 } });
   eq((await gate.gateDecision({ command: 'git commit -m x', cwd: repo })).decision, null, 'just below thresholds: no ask');
   delete process.env.JEV_TEST_ANSWERS;

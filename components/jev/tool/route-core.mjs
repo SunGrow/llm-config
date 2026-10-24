@@ -9,7 +9,10 @@ import { runPreset, redact, optedOut, HERE } from './lib.mjs';
 export const MIN_PROMPT_CHARS = 30;
 export const KIND_MIN = 0.6;   // on the 26-prompt eval every kind hint shown at >= 0.6 was correct
 // Per-flag thresholds picked on the same eval (no false positives at these values).
-export const FLAG_MIN = { needs_current_facts: 0.7, behavior_claims: 0.7, risky: 0.7, heavy_output: 0.85 };
+// Real sessions 16-24.10 (60 judged prompts): implement and review misfired at 0.68-0.82, and behavior_claims
+// filled half of all shown lines with 11 of 25 partly or wholly off; these need more confidence.
+export const KIND_MIN_BY = { implement: 0.85, review: 0.85 };
+export const FLAG_MIN = { needs_current_facts: 0.7, behavior_claims: 0.85, risky: 0.7, heavy_output: 0.85 };
 export const PREV_CHARS = 1200;
 export const NOTE_HEADER = 'Jev routing note (fast classifier, advisory; it can be wrong, overrule it with evidence):';
 
@@ -46,7 +49,7 @@ export function skipPrompt(prompt) {
 export function formatNote(answers) {
   const a = answers || {};
   const lines = [];
-  if (a.kind && a.kind.confidence >= KIND_MIN && HINTS[a.kind.choice]) lines.push(`- ${HINTS[a.kind.choice]} (p=${a.kind.confidence})`);
+  if (a.kind && a.kind.confidence >= (KIND_MIN_BY[a.kind.choice] ?? KIND_MIN) && HINTS[a.kind.choice]) lines.push(`- ${HINTS[a.kind.choice]} (p=${a.kind.confidence})`);
   for (const [k, text] of Object.entries(FLAGS)) if (a[k]?.p >= FLAG_MIN[k]) lines.push(`- ${text} (p=${a[k].p})`);
   return lines.length ? NOTE_HEADER + '\n' + lines.join('\n') : null;
 }
