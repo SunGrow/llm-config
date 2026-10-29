@@ -23,6 +23,19 @@
             "timeout": 12
           }
         ]
+      },
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "{NODE}",
+            "args": [
+              "{JEV_HOME}/agent-model-hook.mjs"
+            ],
+            "timeout": 10
+          }
+        ]
       }
     ]
   }

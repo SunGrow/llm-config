@@ -499,6 +499,30 @@ test('API key file present: no prompt; dry run without a key only warns', () => 
   assert(/no Test API key found .*a real install asks/.test(d.out), d.out);
 });
 
+// Text that agents load must read as rules; the evidence behind a rule belongs in code comments, READMEs,
+// bench/ notes or commit messages. Flags the usual traces of findings pasted into instructions.
+test('agent-facing text states rules, not findings', () => {
+  const repo = path.join(HERE, '..', '..');
+  const SMELLS = [/\bbench\//, /\b\d+(\.\d+)? ?%/, /\b\d+ of \d+\b/, /\b(measured|observed) (on|in)\b/i,
+    /\bon (real|recent) (sessions|prompts|replies|briefs)\b/i, /\b(on|in) \d{1,2}[-.]\d{1,2}(\.\d{1,2})?\b/, /\b20\d\d-\d\d-\d\d\b/];
+  const files = [];
+  const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+    const p = path.join(d, e.name);
+    if (e.isDirectory()) { if (!['node_modules', 'test', 'tool'].includes(e.name)) walk(p); continue; }
+    if (/\.(md|tmpl|toml|mdc)$/.test(e.name) && !/^(HOOKS|README)\.md$/.test(e.name)) files.push(p);
+  } };
+  walk(path.join(repo, 'components'));
+  const presets = path.join(repo, 'components', 'jev', 'tool', 'presets.json');
+  if (fs.existsSync(presets)) files.push(presets);
+  const hits = [];
+  for (const f of files) fs.readFileSync(f, 'utf8').split('\n').forEach((l, i) => {
+    const s = SMELLS.find(re => re.test(l));
+    if (s) hits.push(`${path.relative(repo, f)}:${i + 1} ${s} :: ${l.trim().slice(0, 100)}`);
+  });
+  assert(files.length > 20, 'found too few agent-facing files: ' + files.length);
+  assert(!hits.length, 'findings-style text in agent-facing files:\n      ' + hits.join('\n      '));
+});
+
 console.log(`\n${passed} passed, ${failed} failed (${PLAT}, node ${process.versions.node})`);
 if (!failed && !process.env.KEEP_TMP) fs.rmSync(TMP, { recursive: true, force: true });
 process.exitCode = failed ? 1 : 0;

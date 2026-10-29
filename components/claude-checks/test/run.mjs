@@ -99,6 +99,7 @@ const file = (name, text) => { const p = join(TMP, 'src', name); mkdirSync(dirna
   ok(sc.scanDiff('+++ b/a.txt\n-removed ' + home, sc.privatePatterns()).length === 0, 'safe-commit: removed lines may contain them');
   const r = spawnSync(process.execPath, [join(TOOL, 'safe-commit.mjs'), '-F', 'x'], { encoding: 'utf8', input: '', timeout: 20000 });
   eq(r.status, 3, 'safe-commit: refuses without a terminal');
+  eq(['y', 'y\\', 'Y', '\r', ' ', 'д', 'n', 'N', 'т', '\x1b', '\x03', '\x04'].map(sc.isYes), [true, true, true, true, true, true, false, false, false, false, false, false], 'safe-commit: any key confirms except n, Esc, Ctrl-C, Ctrl-D');
 }
 
 // ---- project-map

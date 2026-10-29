@@ -440,6 +440,46 @@ group('recall');
   for (const x of m.actions) ok(existsSync(join(dirname(COMP), 'jev-recall-claude', x.from)), 'recall component: source exists ' + x.from);
 }
 
+// ---------------------------------------------------------------- agent model hook
+group('agent-model');
+{
+  const am = await import(pathToFileURL(join(TOOL, 'agent-model-hook.mjs')).href);
+  const ch = join(TMP, 'claude-home'); mkdirSync(join(ch, 'agents'), { recursive: true });
+  writeFileSync(join(ch, 'agents', 'step-runner.md'), '---\nname: step-runner\nmodel: sonnet\n---\nbody');
+  writeFileSync(join(ch, 'agents', 'free.md'), '---\nname: free\n---\nbody');
+  process.env.CLAUDE_CONFIG_DIR = ch;
+  const tr = join(TMP, 'parent.jsonl');
+  writeFileSync(tr, JSON.stringify({ type: 'assistant', message: { model: 'claude-opus-5-5', content: [] } }) + '\n');
+  eq(am.definedModel('step-runner', TMP), 'sonnet', 'agent-model: model from front matter');
+  eq(am.definedModel('free', TMP), 'inherit', 'agent-model: definition without model inherits');
+  eq(am.sessionModel(tr), 'claude-opus-5-5', 'agent-model: session model from transcript');
+  const call = (ti, extra = {}) => am.agentModelDecision({ tool_name: 'Agent', tool_input: { description: 'd', ...ti }, cwd: TMP, transcript_path: tr, ...extra });
+  const brief = 'List every file under src that mentions Foo ' + Date.now();
+  ok(/model not set/.test((await call({ subagent_type: 'general-purpose', prompt: brief })).deny || ''), 'agent-model: general-purpose without model denied');
+  eq(await call({ subagent_type: 'general-purpose', prompt: brief }), {}, 'agent-model: re-issued unchanged goes through');
+  ok(/model not set/.test((await call({ subagent_type: 'free', prompt: brief + 'x' })).deny || ''), 'agent-model: custom agent without model denied');
+  eq(await call({ subagent_type: 'fork', prompt: brief }), {}, 'agent-model: fork skipped');
+  process.env.JEV_TEST_ANSWERS = JSON.stringify({ tier: { choice: 'sonnet', confidence: 0.9 } });
+  eq(await call({ subagent_type: 'step-runner', prompt: brief }), {}, 'agent-model: sonnet agent never checked');
+  const d = await call({ subagent_type: 'general-purpose', model: 'opus', prompt: brief + 'y' });
+  ok(/rates this brief as sonnet/.test(d.deny || ''), 'agent-model: opus on sonnet work denied once', JSON.stringify(d));
+  eq(await call({ subagent_type: 'general-purpose', model: 'opus', prompt: brief + 'y' }), {}, 'agent-model: same call again keeps opus');
+  process.env.JEV_TEST_ANSWERS = JSON.stringify({ tier: { choice: 'sonnet', confidence: 0.7 } });
+  eq(await call({ subagent_type: 'general-purpose', model: 'opus', prompt: brief + 'z' }), {}, 'agent-model: below threshold allowed');
+  process.env.JEV_TEST_ANSWERS = JSON.stringify({ tier: { choice: 'opus', confidence: 0.95 } });
+  eq(await call({ subagent_type: 'general-purpose', model: 'opus', prompt: brief + 'w' }), {}, 'agent-model: opus work allowed');
+  delete process.env.JEV_TEST_ANSWERS;
+  eq(await call({ subagent_type: 'general-purpose', model: 'opus', prompt: brief + 'v' }), {}, 'agent-model: Jev offline fails open');
+  process.env.JEV_HOOK = '0';
+  eq(await call({ subagent_type: 'general-purpose', prompt: brief + 'u' }), {}, 'agent-model: JEV_HOOK=0');
+  delete process.env.JEV_HOOK;
+  const r = spawnSync(process.execPath, [join(TOOL, 'agent-model-hook.mjs')], { input: JSON.stringify({ tool_name: 'Agent', tool_input: { subagent_type: 'general-purpose', prompt: brief + 't' }, cwd: TMP }), env: { ...process.env }, encoding: 'utf8', timeout: 20000 });
+  let j = null; try { j = JSON.parse(r.stdout); } catch { /* */ }
+  ok(j?.hookSpecificOutput?.permissionDecision === 'deny' && /model not set/.test(j.hookSpecificOutput.permissionDecisionReason), 'agent-model hook: deny JSON', r.stdout + r.stderr);
+  eq(spawnSync(process.execPath, [join(TOOL, 'agent-model-hook.mjs')], { input: 'bad', encoding: 'utf8' }).stdout, '', 'agent-model hook: bad stdin fails open');
+  delete process.env.CLAUDE_CONFIG_DIR;
+}
+
 // ---------------------------------------------------------------- manifests
 group('manifest');
 {

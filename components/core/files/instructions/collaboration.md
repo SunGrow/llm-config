@@ -16,15 +16,11 @@ Use one agent by default. Add subagents when independent, read-heavy, specialize
 
 ## Large fan-outs (review teams, workflows)
 
-Measured on one review of three Unreal plugins (about 1,100 agents, 465 raw findings), more than half the run's usage went to two strong-model checks of every raw finding. Of the 354 merged findings, 73% were low severity and 55% were cleanup, standards, docs or tests. The fixes then introduced 10 regressions (2 high), which a cheap diff review caught.
-
-- Before launching more than about 20 agents, tell the user the estimated number of agents per phase, the model per phase, and which phase will dominate. Go ahead only at the scale the user asked for.
-- Give each area one reviewer with a combined list of lenses. An area-by-lens grid duplicates findings: in that review, 24% of raw findings merged away. Leave mechanical checks (formatting, naming, include order, standards rows that a tool can check) to a linter or formatter, not to agents.
-- Verify by severity:
-  - High and medium defects (bug, race, leak, data loss) get two independent checks: a mid model first, and a strong model only when the checks disagree.
-  - Low findings get one mid-model check, or go straight to a list for the user.
-- Fix only verified findings. Put low-severity cleanup, docs and standards items in a list or in a separate later pass, never in the same pass as defect fixes.
-- Make a git commit as a baseline before mass fixes. Then make one commit per fixer group, build and run the tests after each group, and finish with a regression review of the whole diff.
+- Before launching more than about 20 agents, tell the user how many agents each phase will run, on which model, and which phase will cost the most. Go ahead only at the scale the user asked for.
+- Give each area one reviewer with a combined list of lenses; an area-by-lens grid mostly finds the same defects again. Leave anything a linter or formatter can check to that tool.
+- Spend verification on severity. High and medium defects get two independent checks: a mid model first, and a strong model only when they disagree. Low findings get at most one mid-model check, or go to a list for the user.
+- Fix only verified findings. Keep cleanup, docs and standards items out of a defect-fix pass: list them or give them a later pass of their own.
+- Make a git commit as a baseline before mass fixes. Make one commit per fixer group and build and test after each group. End with a review of the whole diff for regressions.
 
 ## Merging
 

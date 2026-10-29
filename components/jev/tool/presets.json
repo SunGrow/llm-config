@@ -54,15 +54,15 @@
     }
   },
   "model_tier": {
-    "description": "Pick the cheapest adequate Claude model for a subagent brief (state = the brief).",
+    "description": "Pick the cheapest model that will do a subagent task well (state = JSON with subagent_type, description, brief).",
     "questions": {
       "tier": {
         "type": "choice",
-        "instructions": "Which model tier is the cheapest one that can do this delegated step reliably?",
+        "instructions": "Pick the cheapest model that will do this subagent task well. Judge the work the brief asks for, not how long or detailed the brief is.",
         "criteria": {
-          "haiku": "Mechanical checklist work: listing, collecting, simple lookups, formatting, sweeping files for a pattern",
-          "sonnet": "One well-briefed implementation or investigation step with clear done-criteria",
-          "opus": "Ambiguous diagnosis, architecture or design judgment, synthesis of conflicting evidence, adversarial verification"
+          "haiku": "Mechanical work with a fixed checklist or per-item recipe: list, collect, extract or copy items, find occurrences, run given commands and report their output. No judgment between alternatives.",
+          "sonnet": "A bounded step with a clear goal: implement or edit per a brief or spec section, read-only investigation of a specific question with file:line evidence, web or code research and summary, measurement, bulk reading. Most delegated work.",
+          "opus": "Judgment where a mistake is costly: independent or adversarial verification of claims or reports, critic or reviewer of another agent's work, choosing between designs or root causes, leading or synthesizing other agents, building a large system from a spec."
         }
       }
     }

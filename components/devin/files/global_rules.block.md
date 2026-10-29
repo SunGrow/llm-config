@@ -26,4 +26,4 @@ Full text: `~/.agents/CORE.md`. Read it, then `~/.agents/ROUTER.md` and only the
 
 ## Communication
 - One sentence before the first tool call; updates only on findings or a change of direction; finish with the outcome first, detail after.
-- Brief and focused; short caveats. Explain in the user's terms; if they did not understand, give one concrete example instead of restating. Correct earlier statements only when it changes code, conclusions, or decisions. Documents sized to the task, no filler sections.
+- Brief and focused; short caveats. Explain in the user's terms; if they did not understand, give one concrete example instead of restating. Correct earlier statements only when it changes code, conclusions, or decisions. Documents sized to the task, no filler sections. Agent instructions state the rule and when it applies; evidence (numbers, dates, incidents) goes in comments, READMEs or commit messages.

@@ -29,9 +29,10 @@ Looked up in this order: env `OPENROUTER_API_KEY`, then the key file `$XDG_CONFI
 
 | | Claude Code | Codex CLI | opencode |
 |---|---|---|---|
-| Routing note on each user prompt | off by default (no outcome gain on the Opus benchmark, `bench/jev-opus`); opt-in component `jev-route-claude` adds the UserPromptSubmit hook (skipped for subagents and headless `claude -p`/SDK runs unless `JEV_ROUTE_HEADLESS=1`) | UserPromptSubmit hook (plain stdout becomes developer context) | plugin: `chat.message` + `experimental.chat.system.transform` |
+| Routing note on each user prompt | off by default; opt-in component `jev-route-claude` adds the UserPromptSubmit hook (skipped for subagents and headless `claude -p`/SDK runs unless `JEV_ROUTE_HEADLESS=1`) | UserPromptSubmit hook (plain stdout becomes developer context) | plugin: `chat.message` + `experimental.chat.system.transform` |
 | Hard list (always confirm) | asks (PreToolUse `ask`) | execpolicy rule `prompt` (`rules/jev-guard.rules`); forms the prefix rules miss are blocked by the PreToolUse hook | blocks the bash call |
 | Jev diff_risk on commit/push/destructive | asks on threshold | off by default; `JEV_CODEX_RISK=1` blocks on threshold | blocks on threshold |
+| Subagent model check | PreToolUse on Agent: denies once when no model is set and the agent type has none, or when an Opus/Fable brief rates as Sonnet/Haiku work (`model_tier` ≥ 0.8); the same call re-issued goes through | none | none |
 
 Codex and opencode cannot ask from a pre-tool hook, so a blocked command comes back with a message: ask the user in chat, and only after an explicit yes rerun the same command with `# jev-confirmed` appended (a shell comment, so the command is unchanged). Never add the marker on your own.
 
@@ -42,8 +43,8 @@ Codex and opencode cannot ask from a pre-tool hook, so a blocked command comes b
 | `route` | previous reply tail + user prompt | automatic: prompt hook / plugin | read the injected note as a hint |
 | `diff_risk` | command + staged diff | automatic: pre-tool gate on git commit/push, reset --hard, clean -f, branch -D, checkout/restore of files, stash drop/clear, rm -r / Remove-Item -Recurse (not when every target is inside the temp folder, or every target is a build-output folder such as Saved, Intermediate, Binaries, node_modules or dist at least two levels deep) | confirmation on secrets ≥ 0.8 (only with a secret-like value or file name in the change), destructive ≥ 0.6 or severity ≥ 2.75, and always (without Jev) on reset --hard, clean -f, stash clear, history rewrites, force-push to main/master/release (also with no refspec while on such a branch), and rm -r of .git, a drive root, home or `*` outside the temp folder; run it manually for migrations or other risky changes |
 | `finding_severity` | one review finding | triaging 5+ findings | sort by `severity.score` |
-| `evidence_check` | your draft conclusion + citations | optional, before a long report | low precision on real replies: use only as a prompt to re-read, never as a verdict |
-| `model_tier` | subagent brief | rarely | unreliable on real briefs; do not let it override an agent's defined model |
+| `evidence_check` | your draft conclusion + citations | optional, before a long report | a prompt to re-read the cited evidence, never a verdict |
+| `model_tier` | JSON: `subagent_type`, `description`, `brief` | automatic in Claude Code: the Agent hook checks Opus and Fable briefs | a suggestion; the hook pushes back once, and re-issuing the same call keeps the chosen model |
 
 ## Custom questions (`ask`)
 
@@ -68,7 +69,7 @@ node "{JEV_HOME}/recall.mjs" "<question, any language>" --file <transcript.jsonl
 
 - Output: the best-matching turns, each with its file and line range. Read the transcript around those lines before relying on a hit.
 - `--project` also searches the other sessions in the same folder.
-- Ranking: `voyageai/rerank-2.5` through OpenRouter, sent after redaction. It costs about $0.01 per question for a long session (`bench/recall`); change it with `JEV_RECALL_MODEL`. `--local`, an opted-out project, no key or a failed call all fall back to local BM25, which is weak for paraphrased or cross-language questions.
+- Ranking: `voyageai/rerank-2.5` through OpenRouter, sent after redaction. It costs about $0.01 per question for a long session; change it with `JEV_RECALL_MODEL`. `--local`, an opted-out project, no key or a failed call all fall back to local BM25, which is weak for paraphrased or cross-language questions.
 - The opt-in component `jev-recall-claude` adds a SessionStart hook. After compaction the hook gives Claude this command with the transcript path filled in.
 
 ## Opt-out, cost, privacy

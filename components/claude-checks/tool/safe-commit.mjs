@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Commit what is staged (and optionally push) after deterministic checks: message free of AI attribution, staged
-// diff free of secrets and private patterns. Asks for confirmation on a terminal and refuses without one, so an
+// diff free of secrets and private patterns. Asks for one keypress on a terminal and refuses without one, so an
 // agent cannot use it to get around the commit gate: run it in your own terminal.
 // Usage: node safe-commit.mjs -F <message file> [-C <repo>] [--push] [--sign]
 // Private patterns: one regex per line in ~/.config/llm-config/private-patterns (plus your home folder path).
@@ -8,7 +8,6 @@ import { readFileSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { createInterface } from 'node:readline/promises';
 import { pathToFileURL } from 'node:url';
 
 export const ATTRIBUTION = /co-authored-by:[^\n]*(claude|anthropic|openai|chatgpt|gpt|copilot|gemini|cursor|codex)|generated (with|by)[^\n]*(claude|ai\b|gpt|copilot|gemini)|noreply@anthropic\.com|\u{1F916}/iu;
@@ -21,6 +20,17 @@ export function privatePatterns(home = homedir()) {
     try { pats.push(new RegExp(l, 'i')); } catch { /* skip a bad line */ }
   }
   return pats;
+}
+
+// Any key confirms except n (also Cyrillic т, the same key on a Russian layout), Esc, Ctrl-C and Ctrl-D.
+export const isYes = (key) => !/^[nNтТ\x1b\x03\x04]/.test(String(key));
+
+function readKey() {
+  return new Promise((resolve) => {
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.once('data', (d) => { process.stdin.setRawMode(false); process.stdin.pause(); resolve(d.toString('utf8')); });
+  });
 }
 
 // Only added lines count: removing a leaked value must stay possible.
@@ -53,10 +63,12 @@ if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   const branch = git('rev-parse', '--abbrev-ref', 'HEAD').stdout.trim();
   const email = git('config', 'user.email').stdout.trim();
   console.log(`Repo ${repo}\nBranch ${branch}, author email ${email}\n${files.length} file(s): ${files.slice(0, 10).join(', ')}${files.length > 10 ? ' ...' : ''}\nMessage: ${msg.split('\n')[0]}`);
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const yes = /^y(es)?$/i.test((await rl.question(`Commit${a.includes('--push') ? ' and push' : ''}? [y/N] `)).trim());
-  rl.close();
-  if (!yes) die('cancelled', 1);
+  // One keypress, no Enter. The signing prompt is no substitute: gpg-agent caches the passphrase, so a second
+  // commit within its cache time would go through without you.
+  process.stdout.write(`${a.includes('--push') ? 'Commit and push' : 'Commit'}: press any key, or n / Esc to cancel `);
+  const key = await readKey();
+  process.stdout.write('\n');
+  if (!isYes(key)) die('cancelled', 1);
   const c = spawnSync('git', ['-C', repo, 'commit', ...(a.includes('--sign') ? ['-S'] : []), '-F', msgFile], { stdio: 'inherit' });
   if (c.status !== 0) die('git commit failed', c.status || 1);
   if (a.includes('--push')) { const p = spawnSync('git', ['-C', repo, 'push'], { stdio: 'inherit' }); if (p.status !== 0) die('git push failed', p.status || 1); }

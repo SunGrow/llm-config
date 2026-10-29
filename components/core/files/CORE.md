@@ -41,6 +41,7 @@
 - Explain in the user's own terms: define each new term once, one idea per paragraph. When the user says they did not understand, re-explain with one concrete example from their case instead of restating.
 - Correct an earlier statement only when the error would change the user's code, conclusions, or decisions; say it plainly in a sentence and continue. Fix slips that change nothing without remarking on them.
 - Size written documents (reports, Markdown) to the task: no filler sections, redundant summaries, or boilerplate. Output for a parser or another agent is the final answer only, without narration.
+- Instructions for agents (rules, skills, briefs, hook messages) state the rule and when it applies. Keep the evidence behind a rule (numbers, dates, incidents) in code comments, READMEs, benchmark notes or commit messages, not in the rule.
 
 ## On compaction keep
 
