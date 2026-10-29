@@ -74,7 +74,14 @@ function parseGit(words, cwd) {
 const isInside = (p, root) => { const r = relative(resolve(root), resolve(p)); return r === '' || (!r.startsWith('..') && !isAbsolute(r)); };
 const shortFlag = (args, ch) => args.some(a => /^-[A-Za-z]+$/.test(a) && a.includes(ch));
 const RM = new Set(['rm', 'remove-item', 'ri', 'del', 'erase', 'rd', 'rmdir']);
-const PROTECTED_BRANCH = /^\+?(?:refs\/heads\/)?(main|master|trunk|release.*|prod.*)$/i;
+export const BUILD_OUTPUT_DIRS = new Set(['saved', 'intermediate', 'binaries', 'deriveddatacache', 'node_modules', 'dist', '__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache', '.vite', '.next', '.turbo', '.parcel-cache']);
+export function isBuildOutput(arg, dir) {
+  if (/[$*?%~]/.test(arg)) return false;
+  const p = resolve(dir, arg.replace(/^["']|["']$/g, ''));
+  const parts = p.split(/[\\/]+/).filter(Boolean);
+  return parts.length >= 3 && BUILD_OUTPUT_DIRS.has(parts[parts.length - 1].toLowerCase());
+}
+const PROTECTED_BRANCH =/^\+?(?:refs\/heads\/)?(main|master|trunk|release.*|prod.*)$/i;
 const stripComment = (words) => { const i = words.findIndex(w => w.startsWith('#')); return i < 0 ? words : words.slice(0, i); };
 
 // `git` is used only to resolve the current branch of a no-refspec force-push; pass a stub in tests.
@@ -94,6 +101,9 @@ export function classify(command, cwd, git = mkGit(Date.now() + 10000)) {
         // On 16-24.10, 17 of 25 rm asks were such paths. Variables, globs and `*` stay gated.
         const targets = w.slice(1).filter(a => !a.startsWith('-') && !/^\/s$|^\/q$/i.test(a));
         if (targets.length && targets.every(a => !/[$*?%~]/.test(a) && isInside(resolve(dir, a), tmpdir()))) continue;
+        // Every target a regenerated build-output folder (Unreal Saved/Intermediate/..., node_modules, dist): on
+        // 16-24.10 the remaining rm asks on build commands were these. Must be named exactly, at least two levels deep.
+        if (targets.length && targets.every(a => isBuildOutput(a, dir))) continue;
         found.destructive.push(text);
         // Always ask for: this folder's own .git (a nested scaffold's .git goes to Jev), a drive or filesystem
         // root, home, or `*` outside the temp folder.

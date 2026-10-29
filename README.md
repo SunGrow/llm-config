@@ -72,6 +72,7 @@ is kept, the installer only manages marked blocks and the JSON keys it added.
 | `jev` (optional) | Jev decision model hooks: a risk check before git commit/push and destructive commands (Claude Code, Codex, opencode) and an advisory routing note on each prompt (Codex, opencode). Needs an OpenRouter key, ~$0.0001 per call. See `components/jev/SKILL.md.tmpl` |
 | `jev-route-claude` (optional) | The routing note in Claude Code too. Off by default: it changed no outcomes for Opus or Haiku in `bench/jev-opus` |
 | `jev-recall-claude` (optional) | After compaction, Claude Code is told how to recall earlier turns by question (`recall.mjs`, OpenRouter rerank model, local BM25 fallback, ~$0.01 per question). In `bench/recall` it halved turns and time on recall questions |
+| `claude-checks` (optional) | Rule-based Claude Code hooks, no model calls: a syntax and control-character check after each edit, a done-check when code changed after the last test or build (fired on 4% of edit turns in a replay of a week of sessions), a cached project map at session start. Also `session-stats.mjs` and the terminal-only `safe-commit.mjs` |
 | `unreal` (optional) | Unreal Engine pack and generic UE C++ rules |
 
 Always-loaded size after install: about 4.5k characters per tool, plus short skill and agent descriptions.

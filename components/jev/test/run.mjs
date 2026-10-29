@@ -96,7 +96,9 @@ group('classify');
     ['rm -rf sub/.git', { hard: false, destr: true, commit: false, push: false }],          // nested scaffold .git -> Jev
     ['rm -rf ~', { hard: true, destr: true, commit: false, push: false }],
     ['rm -rf /', { hard: true, destr: true, commit: false, push: false }],
-    ['rm -rf node_modules', { hard: false, destr: true, commit: false, push: false }],
+    // Build output is exempt only two or more levels below the root (proj is /jev-proj on Linux runners).
+    ['rm -rf node_modules', { hard: false, destr: join(proj, 'node_modules').split(/[\\/]+/).filter(Boolean).length < 3, commit: false, push: false }],
+    ['rm -rf node_modules src', { hard: false, destr: true, commit: false, push: false }],
     ['rm file.txt', { hard: false, destr: false, commit: false, push: false }],
     ['rm -r *', { hard: true, destr: true, commit: false, push: false }],                   // * outside temp
     [`cd ${JSON.stringify(T)} && rm -r *`, { hard: false, destr: true, commit: false, push: false }], // * inside temp
@@ -203,6 +205,12 @@ group('gate-core');
     eq(gate.classify(`rm -rf ${t}`, repo).destructive.length, 0, 'rm -r inside the temp folder is not gated');
     eq(gate.classify('rm -rf $TMP/x', repo).destructive.length, 1, 'rm -r with a variable target stays gated');
     eq(gate.classify(`rm -rf ${t} ${process.platform === 'win32' ? 'D:/data' : '/srv/data'}`, repo).destructive.length, 1, 'rm -r with any target outside temp stays gated'); }
+  { const proj = process.platform === 'win32' ? 'D:/games/Hart' : '/srv/games/Hart';
+    eq(gate.classify(`cd ${proj} && rm -rf Saved Intermediate Binaries`, repo).destructive.length, 0, 'rm -r of Unreal build output is not gated');
+    eq(gate.classify(`Remove-Item -Recurse -Force "${proj}/node_modules"`, repo).destructive.length, 0, 'Remove-Item of node_modules is not gated');
+    eq(gate.classify(`cd ${proj} && rm -rf Saved Content`, repo).destructive.length, 1, 'any non-build target keeps the gate');
+    eq(gate.classify('rm -rf /dist', repo).destructive.length, 1, 'build-output name at the root stays gated');
+    eq(gate.classify(`cd ${proj} && rm -rf Saved/*`, repo).destructive.length, 1, 'globs stay gated'); }
   process.env.JEV_TEST_ANSWERS = JSON.stringify({ secrets_or_auth: { p: 0.79 }, destructive: { p: 0.59 }, severity: { score: 2.74 } });
   eq((await gate.gateDecision({ command: 'git commit -m x', cwd: repo })).decision, null, 'just below thresholds: no ask');
   delete process.env.JEV_TEST_ANSWERS;
