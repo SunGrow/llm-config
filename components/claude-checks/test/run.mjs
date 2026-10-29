@@ -160,6 +160,21 @@ const file = (name, text) => { const p = join(TMP, 'src', name); mkdirSync(dirna
   eq(hook('fanout-nudge.mjs', { ...inp, session_id: 'x' + Date.now(), agent_id: 'a1' }, env).stdout, '', 'fanout hook: silent inside a subagent');
 }
 
+// ---- context notes (inside fanout-nudge)
+{
+  const cn = await imp('context-note.mjs');
+  const env = { CLAUDE_CHECKS_COUNTERS: join(TMP, 'img'), CLAUDE_CHECKS_STATE: join(TMP, 'once-cn') };
+  const sid = 'cn' + Date.now();
+  const img = { tool_name: 'mcp__Claude_Browser__computer', session_id: sid, cwd: TMP, tool_response: [{ type: 'image', source: {} }] };
+  const outs = [1, 2, 3].map(() => hook('fanout-nudge.mjs', img, env).stdout);
+  ok(outs[0] === '' && outs[1] === '' && outs[2].includes('3 image/screenshot results'), 'context note: every third image', JSON.stringify(outs));
+  const big = hook('fanout-nudge.mjs', { tool_name: 'Bash', session_id: sid, cwd: TMP, tool_response: { stdout: 'x'.repeat(cn.TEXT_LIMIT + 10) } }, env).stdout;
+  ok(big.includes('KB of text'), 'context note: large text result', big);
+  eq(hook('fanout-nudge.mjs', { tool_name: 'Bash', session_id: sid, cwd: TMP, tool_response: { stdout: 'small' } }, env).stdout, '', 'context note: small result silent');
+  eq(hook('fanout-nudge.mjs', { tool_name: 'Write', session_id: sid, cwd: TMP, tool_response: 'x'.repeat(cn.TEXT_LIMIT + 10) }, env).stdout, '', 'context note: other tools ignored');
+  eq(hook('fanout-nudge.mjs', { ...img, agent_id: 'a' }, env).stdout, '', 'context note: silent in subagents');
+}
+
 // ---- hook-health
 {
   const hh = await imp('hook-health.mjs'), cm = await imp('common.mjs');
