@@ -33,15 +33,18 @@ export const HINTS = {
 export const FLAGS = {
   needs_current_facts: 'may depend on facts newer than training data: first check a current source (docs, release notes, installed version)',
   behavior_claims: 'answer will make behavior claims: first verify them against the implementation or a run; for several claims use the verify-claims skill or the claim-verifier agent',
-  risky: 'destructive or outward-facing actions possible: first ask the user to confirm the exact action',
+  risky: 'destructive or outward-facing action in play: if the user has not already named this exact action, confirm it with them first',
   heavy_output: 'bulky output likely: first hand dumps, screenshot sequences or many-file searches to a subagent (e.g. heavy-output-runner) and keep only its summary',
 };
 
 // Prompts that are not typed by the user: slash commands, harness messages such as <task-notification>,
 // and the summary that opens a compacted session (on 16-18.10 ~75% of route calls, all "continue").
+export const stripPasted = (text) => String(text).replace(/<pasted_content[^>]*>[\s\S]*?<\/pasted_content[^>]*>/g, ' [pasted text] ').trim();
+
 export function skipPrompt(prompt) {
   if (prompt.length < MIN_PROMPT_CHARS) return 'short';
   if (prompt.startsWith('/')) return 'slash-command';
+  if (prompt.startsWith('[Request interrupted')) return 'interrupt';
   if (prompt.startsWith('<') || prompt.startsWith('This session is being continued from a previous conversation')) return 'harness';
   return null;
 }
@@ -59,12 +62,15 @@ export async function routeNote({ prompt, previousReply = '', cwd, deadline = Da
   try {
     const p = String(prompt || '').trim();
     if (optedOut(cwd)) return { note: null, skipped: 'opted-out' };
-    const why = skipPrompt(p);
+    // Text the user pasted from elsewhere is material, not their request: classify only their own words
+    // (on 24-29.10 pasted drafts drew 'feedback' notes and an interrupt marker drew a 'risky' one).
+    const own = stripPasted(p);
+    const why = skipPrompt(own);
     if (why) return { note: null, skipped: why };
     // Structured state with descriptive field names (docs.typesafe.ai/concepts/state); the previous
     // reply lets Jev tell "Yes, go ahead" from a new task (eval: shown hints 7/11 -> 11/11 correct).
     const prev = previousReply ? redact(previousReply).slice(-PREV_CHARS) : ''; // redact first: a cut can drop a key's prefix
-    const state = prev ? { assistant_previous_reply_tail: prev, user_new_message: p } : { user_new_message: p };
+    const state = prev ? { assistant_previous_reply_tail: prev, user_new_message: own } : { user_new_message: own };
     const opts = { timeout, retries: 0, deadline };
     if (label) opts.label = label;
     const r = await runPreset('route', state, opts);
