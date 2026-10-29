@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Claude Code PostToolUse hook (all tools): once per turn, when the main thread reaches NUDGE_AT tool calls
 // without delegating anything, remind Claude to split off independent parts. Advisory context only.
-import { optedOut, readStdinJson, tail, parseLines, isTypedPrompt } from './common.mjs';
+import { optedOut, readStdinJson, tail, parseLines, isTypedPrompt, logHookError } from './common.mjs';
 import { firstTime } from './once.mjs';
 
 export const NUDGE_AT = Number(process.env.CLAUDE_CHECKS_FANOUT_AT) || 40;
@@ -30,5 +30,5 @@ if (process.argv[1]?.endsWith('fanout-nudge.mjs')) {
         console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: NOTE } }));
       }
     }
-  } catch { /* fail open */ }
+  } catch (e) { logHookError('fanout-nudge', e); /* fail open */ }
 }

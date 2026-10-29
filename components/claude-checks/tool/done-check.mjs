@@ -3,7 +3,7 @@
 // none), send it back once to run the check or to name what is unverified. Rule-based, no model call.
 import { tmpdir } from 'node:os';
 import { resolve, extname, basename } from 'node:path';
-import { optedOut, readStdinJson, tail, parseLines, isTypedPrompt } from './common.mjs';
+import { optedOut, readStdinJson, tail, parseLines, isTypedPrompt, logHookError } from './common.mjs';
 
 const EDIT_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
@@ -47,5 +47,5 @@ if (process.argv[1] && import.meta.url.endsWith(basename(process.argv[1]))) {
         console.log(JSON.stringify({ decision: 'block', reason: `Done-check: in this turn you changed ${list} after the last test/build/check command (or ran none). Run the check that covers these changes now; if none applies or it cannot run here, say in your final message which changes are not verified and why. Do not repeat earlier work.` }));
       }
     }
-  } catch { /* never block on our own failure */ }
+  } catch (e) { logHookError('done-check', e); /* never block on our own failure */ }
 }

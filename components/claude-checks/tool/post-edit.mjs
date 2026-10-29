@@ -5,7 +5,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { basename, extname, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { optedOut, readStdinJson } from './common.mjs';
+import { optedOut, readStdinJson, logHookError } from './common.mjs';
 
 const MAX_BYTES = 2 << 20;
 
@@ -61,5 +61,5 @@ if (process.argv[1] && import.meta.url.endsWith(basename(process.argv[1]))) {
         console.log(JSON.stringify({ decision: 'block', reason: `Post-edit check of ${path}:\n- ${problems.join('\n- ')}\nFix this before continuing.` }));
       }
     }
-  } catch { /* never break the session */ }
+  } catch (e) { logHookError('post-edit', e); /* never break the session */ }
 }

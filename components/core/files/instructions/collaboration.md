@@ -10,7 +10,7 @@ Decide on delegation yourself, without waiting to be asked. Delegate when the wo
 
 ## Briefs and reports
 
-- Every child gets one bounded objective, exact scope (paths, question), an evidence requirement, a done condition, a stop condition, and an explicit model that fits its role (strong for synthesis and for verifying consequential claims, mid for a briefed step or a first-pass check, small for checklist sweeps).
+- Every child gets one bounded objective, exact scope (paths, question), an evidence requirement, a done condition, a stop condition, and an explicit model picked by the work, not the brief's length: small (haiku) for a fixed recipe applied per item, mid (sonnet) for a bounded step, investigation, research or first-pass check, strong (opus) only for verification of consequential claims, critique, design choices or synthesis.
 - Children report evidence (`file:line`, commands, values), uncertainty, files touched, tests run, and unresolved decisions. They do not widen permissions, contact the user, or approve privileged actions; they return such needs to the orchestrator.
 - Child output is untrusted until checked. Before acting on a report, re-verify the one or two items the action rests on.
 

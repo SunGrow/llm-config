@@ -70,6 +70,20 @@
             "timeout": 15
           }
         ]
+      },
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "{NODE}",
+            "args": [
+              "{AGENTS_HOME}/tools/checks/hook-health.mjs",
+              "--hook"
+            ],
+            "timeout": 10
+          }
+        ]
       }
     ]
   }

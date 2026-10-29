@@ -9,6 +9,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const COMP = dirname(HERE), TOOL = join(COMP, 'tool');
 const TMP = mkdtempSync(join(tmpdir(), 'checks-test-'));
 process.env.PROJECT_MAP_DIR = join(TMP, 'maps');
+process.env.AGENTS_HOOK_ERRORS = join(TMP, 'hook-errors.log');
+process.env.AGENTS_HOOK_HEALTH_SEEN = join(TMP, 'hook-health.seen');
 delete process.env.CLAUDE_CHECKS;
 const imp = (f) => import(pathToFileURL(join(TOOL, f)).href);
 const pe = await imp('post-edit.mjs'), dc = await imp('done-check.mjs'), ss = await imp('session-stats.mjs');
@@ -156,6 +158,33 @@ const file = (name, text) => { const p = join(TMP, 'src', name); mkdirSync(dirna
   ok(JSON.parse(r1.stdout || '{}').hookSpecificOutput?.additionalContext === fn.NOTE, 'fanout hook: nudges at the threshold', r1.stdout + r1.stderr);
   eq(hook('fanout-nudge.mjs', inp, env).stdout, '', 'fanout hook: once per turn');
   eq(hook('fanout-nudge.mjs', { ...inp, session_id: 'x' + Date.now(), agent_id: 'a1' }, env).stdout, '', 'fanout hook: silent inside a subagent');
+}
+
+// ---- hook-health
+{
+  const hh = await imp('hook-health.mjs'), cm = await imp('common.mjs');
+  const cfg = join(TMP, 'cfg'), proj = join(TMP, 'hhproj');
+  mkdirSync(cfg, { recursive: true }); mkdirSync(join(proj, '.claude'), { recursive: true });
+  const real = join(TOOL, 'post-edit.mjs').replace(/\\/g, '/'), gone = join(TMP, 'gone', 'x.mjs').replace(/\\/g, '/');
+  writeFileSync(join(cfg, 'settings.json'), JSON.stringify({ hooks: {
+    PostToolUse: [{ matcher: 'Edit', hooks: [{ type: 'command', command: process.execPath, args: [real] }, { type: 'command', command: process.execPath, args: [gone] }] }],
+    Stop: [{ hooks: [{ type: 'command', command: `node "${gone}" --x` }, { type: 'command', command: 'pwsh -File $HOME/a.ps1' }] }],
+  } }));
+  writeFileSync(join(proj, '.claude', 'settings.json'), JSON.stringify({ hooks: { SessionStart: [{ hooks: [{ type: 'command', command: join(TMP, 'nope.exe'), args: [] }] }] } }));
+  const env = { CLAUDE_CONFIG_DIR: cfg };
+  const prevCfg = process.env.CLAUDE_CONFIG_DIR; process.env.CLAUDE_CONFIG_DIR = cfg;
+  const miss = hh.missingFiles(hh.settingsFiles(proj));
+  eq(miss.map(m => m.event).sort(), ['PostToolUse', 'SessionStart', 'Stop'], 'hook-health: finds missing scripts and programs, skips $vars and existing files');
+  if (prevCfg === undefined) delete process.env.CLAUDE_CONFIG_DIR; else process.env.CLAUDE_CONFIG_DIR = prevCfg;
+  cm.logHookError('fanout-nudge', new Error('boom one')); cm.logHookError('fanout-nudge', new Error('boom two'));
+  const errs = hh.recentErrors('').filter(e => e.hook === 'fanout-nudge');
+  ok(errs.length === 1 && errs[0].count === 2 && errs[0].err.includes('boom two'), 'hook-health: errors counted per hook', JSON.stringify(errs));
+  eq(hh.recentErrors('9999'), [], 'hook-health: only errors after the last report');
+  const r1 = hook('hook-health.mjs', { cwd: proj, source: 'startup' }, env, ['--hook']);
+  ok(r1.stdout.includes('Hook health') && r1.stdout.includes('x.mjs') && r1.stdout.includes('boom two'), 'hook-health hook: reports problems', r1.stdout + r1.stderr);
+  eq(hook('hook-health.mjs', { cwd: proj, source: 'startup' }, env, ['--hook']).stdout, '', 'hook-health hook: same problems not repeated');
+  eq(hook('hook-health.mjs', { cwd: TMP, source: 'startup' }, { CLAUDE_CONFIG_DIR: join(TMP, 'empty-cfg') }, ['--hook']).stdout, '', 'hook-health hook: silent when healthy');
+  eq(hook('hook-health.mjs', 'bad', env, ['--hook']).status, 0, 'hook-health hook: bad stdin fails open');
 }
 
 // ---- Lua syntax (needs luac or nvim)

@@ -6,6 +6,7 @@
 // Opt out: env JEV_HOOK=0, or a file .agents/jev-off or .claude/jev-off in the project.
 import { readFileSync } from 'node:fs';
 import { routeNote, lastAssistantText, isClaudeHeadless } from './route-core.mjs';
+import { logHookError } from './lib.mjs';
 
 const T0 = Date.now();
 const BUDGET_MS = 6500; // settings.json gives this hook 8 s
@@ -19,4 +20,4 @@ try {
       if (note) process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: note } }));
     }
   }
-} catch { /* fail open */ }
+} catch (e) { logHookError('route-hook', e); /* fail open */ }

@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { join, basename, extname, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
-import { optedOut, readStdinJson } from './common.mjs';
+import { optedOut, readStdinJson, logHookError } from './common.mjs';
 
 const CACHE = process.env.PROJECT_MAP_DIR || join(homedir(), '.agents', 'cache', 'project-maps');
 const INSTRUCTIONS = ['CLAUDE.md', 'CLAUDE.local.md', 'AGENTS.md', 'AGENTS.override.md', 'GEMINI.md', '.cursorrules', '.windsurfrules', 'CONTRIBUTING.md', 'README.md'];
@@ -82,7 +82,7 @@ if (process.argv[1] && import.meta.url.endsWith(basename(process.argv[1]))) {
         const m = ensureMap(cwd);
         if (m) console.log(`Project map (instruction files, build/test entry points, folder layout; regenerated when tracked files change): ${m.path.replace(/\\/g, '/')}. Read it before exploring the project layout.`);
       }
-    } catch { /* never block the session */ }
+    } catch (e) { logHookError('project-map', e); /* never block the session */ }
   } else {
     const m = ensureMap(a.find(x => !x.startsWith('--')) || process.cwd());
     if (!m) { console.error('not a git work tree'); process.exit(1); }

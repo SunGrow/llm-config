@@ -17,6 +17,7 @@ const COMP = dirname(HERE);
 const TOOL = join(COMP, 'tool');
 const TMP = mkdtempSync(join(tmpdir(), 'jev-test-'));
 process.env.JEV_LOG_DIR = join(TMP, 'logs');
+process.env.AGENTS_HOOK_ERRORS = join(TMP, 'hook-errors.log');
 process.env.JEV_OFFLINE = '1'; // offline sections never call out; the live section lifts it
 delete process.env.JEV_HOOK;
 delete process.env.JEV_TEST_ANSWERS;

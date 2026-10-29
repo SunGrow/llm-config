@@ -6,6 +6,7 @@
 // Opt out: env JEV_HOOK=0, or a file .agents/jev-off or .claude/jev-off in the project.
 import { readFileSync } from 'node:fs';
 import { gateDecision } from './gate-core.mjs';
+import { logHookError } from './lib.mjs';
 
 const T0 = Date.now();
 const BUDGET_MS = 10000; // settings.json gives this hook 12 s; git calls and Jev share this budget
@@ -21,4 +22,4 @@ try {
     const r = await gateDecision({ command: input.tool_input?.command, cwd: input.cwd || process.cwd(), toolUseId: input.tool_use_id, deadline: T0 + BUDGET_MS });
     if (r.decision === 'ask') ask(r.reason);
   }
-} catch { /* fail open */ }
+} catch (e) { logHookError('gate-hook', e); /* fail open */ }

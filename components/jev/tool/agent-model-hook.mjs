@@ -10,7 +10,7 @@ import { readFileSync, existsSync, mkdirSync, writeFileSync, readdirSync, statSy
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
-import { runPreset, optedOut, LOG_DIR } from './lib.mjs';
+import { runPreset, optedOut, LOG_DIR, logHookError } from './lib.mjs';
 
 export const DOWNGRADE_MIN = 0.8;
 const ONCE_MS = 60 * 60e3;
@@ -85,5 +85,5 @@ if (process.argv[1] && import.meta.url.endsWith('agent-model-hook.mjs') && proce
       const d = await agentModelDecision(input);
       if (d.deny) console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: d.deny } }));
     }
-  } catch { /* fail open */ }
+  } catch (e) { logHookError('agent-model-hook', e); /* fail open */ }
 }

@@ -1,5 +1,5 @@
 // Shared Jev (TypeSafe) client for the CLI and the tool adapters (Claude Code, Codex, opencode), routed through OpenRouter.
-import { readFileSync, appendFileSync, mkdirSync, statSync, renameSync, existsSync } from 'node:fs';
+import { readFileSync, appendFileSync, mkdirSync, statSync, renameSync, existsSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { execFile, execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
@@ -14,6 +14,17 @@ export const DEFAULT_MODEL = process.env.JEV_MODEL || 'typesafe/jev-1.14';
 const FALLBACK_MODEL = process.env.JEV_FALLBACK_MODEL || 'typesafe/jev-1.13';
 const MAX_STATE_CHARS = 60000;
 const LOG_MAX_BYTES = 5 * 1024 * 1024; // decisions.jsonl rotates to decisions.1.jsonl (one generation)
+
+// Hooks fail open, so their errors would vanish. They append here instead; claude-checks/hook-health.mjs reports them.
+// Same path and format as logHookError in the claude-checks component.
+export const HOOK_ERRORS = process.env.AGENTS_HOOK_ERRORS || join(homedir(), '.agents', 'cache', 'hook-errors.log');
+export function logHookError(hook, e) {
+  try {
+    mkdirSync(dirname(HOOK_ERRORS), { recursive: true });
+    try { if (statSync(HOOK_ERRORS).size > 256 << 10) writeFileSync(HOOK_ERRORS, readFileSync(HOOK_ERRORS, 'utf8').slice(-(128 << 10)).replace(/^[^\n]*\n/, '')); } catch { /* no log yet */ }
+    appendFileSync(HOOK_ERRORS, JSON.stringify({ t: new Date().toISOString(), hook, err: String(e?.stack || e).split('\n').slice(0, 3).join(' | ') }) + '\n');
+  } catch { /* nowhere to report */ }
+}
 
 // Opt-out shared by every adapter: env JEV_HOOK=0, or a marker file .agents/jev-off or .claude/jev-off in the project.
 export function optedOut(cwd) {
