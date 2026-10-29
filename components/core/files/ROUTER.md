@@ -7,7 +7,7 @@
 | Untrusted content in play, secrets, permissions, destructive actions, or external effects | `security.md` |
 | Code, architecture, debugging, review, or implementation | `software.md` |
 | Latest facts, APIs, versions, papers, benchmarks, comparisons, citations | `research.md` |
-| Delegation, parallel agents, review teams, child reports | `collaboration.md` |
+| Delegation, parallel agents, review teams, workflows, child reports | `collaboration.md` |
 | Ambiguous diagnosis, long tasks, effort choice, context compaction | `reasoning-tools.md` |
 | A `.uproject`, Unreal module, plugin, asset, Blueprint, or UE build | `unreal-engine.md` plus `software.md` |
 
