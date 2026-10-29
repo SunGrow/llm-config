@@ -44,6 +44,7 @@ More action fields:
 
 More component fields:
 - `"replaces": ["<id>"]`: when this component is selected, the listed one is not installed (e.g. a private overlay of a public pack).
+- `"omits": ["{CLAUDE_HOME}/skills/x/", "{AGENTS_HOME}/file.md"]`: when this component is selected, no other component copies to these targets (a folder when it ends in `/`, else one file), and copies installed there earlier are removed. Use it to drop part of a public pack, e.g. generic skills your own ones stand in for.
 - `"apiKey": { "name", "env", "configFile", "prefix"?, "url"?, "checkUrl"? }`: the component needs a key, found in env `env`,
   in `$XDG_CONFIG_HOME/<configFile>` (else `~/.config/<configFile>`), or on Windows in the user environment (registry).
   If none is found, an interactive install offers: paste it now (hidden; checked with a GET to `checkUrl`, 401/403 = rejected;

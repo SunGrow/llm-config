@@ -275,6 +275,7 @@ function loadComponents(root) {
         platforms: Array.isArray(def.platforms) ? def.platforms : null,
         requiresBinaries: Array.isArray(def.requiresBinaries) ? def.requiresBinaries : [],
         replaces: Array.isArray(def.replaces) ? def.replaces : [],
+        omits: Array.isArray(def.omits) ? def.omits.filter((s) => typeof s === 'string' && s) : [],
         postInstall: def.postInstall || '',
         apiKey: isObj(def.apiKey) && def.apiKey.env && def.apiKey.configFile ? def.apiKey : null,
         actions,
@@ -527,6 +528,8 @@ const PLANNERS = {
     }
     const shadowedBy = new Set();
     const owned = pairs.filter(({ dest }) => {
+      const om = (ctx.omits || []).find((x) => x.by !== comp.id && (x.dir ? isInside(dest, x.path) : keyOf(dest) === keyOf(x.path)));
+      if (om) { shadowedBy.add(`${om.by} (omits)`); return false; }
       const o = ctx.shadow?.get(`copy:${keyOf(dest)}`);
       if (o && o !== comp.id) { shadowedBy.add(o); return false; }
       return true;
@@ -1270,12 +1273,19 @@ async function runInstall(opts, comps, info, manifest, vars, root, prompts) {
   const finalIds = new Set(final.map((c) => c.id));
   for (const c of final) for (const r of c.requires) if (!finalIds.has(r) && comps.has(r) && !manifest.components[r]) ctx.warnings.push(`${c.id} requires ${r}, which is not being installed`);
   ctx.whenSet = new Set([...finalIds, ...Object.keys(manifest.components)]);
+  // omits: target paths (a file, or a folder ending in /) that no other selected component may copy to.
+  ctx.omits = [];
+  for (const c of final) for (const raw of c.omits) {
+    try { ctx.omits.push({ path: targetPath(raw, ctx, 'omits'), dir: raw.endsWith('/'), by: c.id }); }
+    catch (e) { ctx.warnings.push(`${c.id}: omits ${raw}: ${e.message}`); }
+  }
 
   // Pass 1: which record keys does the new plan produce (to detect stale ones)?
   const keySets = new Map();
   {
     const probe = makeCtx({ ...opts, verbose: false }, vars, root);
     probe.whenSet = ctx.whenSet;
+    probe.omits = ctx.omits;
     for (const c of final) {
       probe.oldRecords = new Map((manifest.components[c.id]?.records || []).map((r) => [r.key, r]));
       const r = planComponent(c, probe);

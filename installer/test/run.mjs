@@ -401,6 +401,22 @@ test('unless skips when the listed component is selected, runs otherwise', () =>
   eq(run(ROOT2, h, ['--yes', '--components', 'toola,toolb']).code, 0);
   assert(!exists(path.join(h, '.toola', 'only-without-b.json')), 'should be skipped with toolb');
 });
+test('omits: a selected overlay stops another component copying to a path; the earlier copy is removed', () => {
+  const R = path.join(TMP, 'root-omits'), h = path.join(TMP, 'home-omits');
+  const comp = (dir, id, def) => write(path.join(R, dir, id, 'component.json'), JSON.stringify({ id, title: id, group: 'base', default: true, ...def }, null, 2));
+  comp('components', 'pub', { actions: [{ type: 'copy', from: 'skills/', to: '{CLAUDE_HOME}/skills/' }] });
+  write(path.join(R, 'components', 'pub', 'skills', 'keep', 'SKILL.md'), 'keep\n');
+  write(path.join(R, 'components', 'pub', 'skills', 'drop', 'SKILL.md'), 'drop\n');
+  eq(run(R, h, ['--yes']).code, 0);
+  assert(exists(path.join(h, '.claude', 'skills', 'drop', 'SKILL.md')), 'public skill should install without the overlay');
+  comp('local/components', 'mine', { requires: ['pub'], omits: ['{CLAUDE_HOME}/skills/drop/'], actions: [] });
+  const r = run(R, h, ['--yes']);
+  eq(r.code, 0, r.out);
+  assert(!exists(path.join(h, '.claude', 'skills', 'drop', 'SKILL.md')), 'omitted skill should be removed');
+  eq(read(path.join(h, '.claude', 'skills', 'keep', 'SKILL.md')), 'keep\n');
+  eq(run(R, h, ['--yes', '--update']).code, 0);
+  assert(!exists(path.join(h, '.claude', 'skills', 'drop', 'SKILL.md')), 'omitted skill should stay removed');
+});
 test('json-merge onlyIfExists does not create the file, merges when present', () => {
   assert(!exists(path.join(home5, '.cursor', 'cli-config.json')), 'created a file that did not exist');
   write(path.join(home5, '.cursor', 'cli-config.json'), JSON.stringify({ version: 1 }, null, 2));

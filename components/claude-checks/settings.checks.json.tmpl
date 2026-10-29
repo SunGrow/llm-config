@@ -29,6 +29,19 @@
     ],
     "PreToolUse": [
       {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "{NODE}",
+            "args": [
+              "{AGENTS_HOME}/tools/checks/read-guard.mjs"
+            ],
+            "timeout": 10
+          }
+        ]
+      },
+      {
         "matcher": "Bash|PowerShell",
         "hooks": [
           {
@@ -68,6 +81,20 @@
               "--hook"
             ],
             "timeout": 15
+          }
+        ]
+      },
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "{NODE}",
+            "args": [
+              "{AGENTS_HOME}/tools/checks/read-guard.mjs",
+              "--reset"
+            ],
+            "timeout": 10
           }
         ]
       },

@@ -175,6 +175,29 @@ const file = (name, text) => { const p = join(TMP, 'src', name); mkdirSync(dirna
   eq(hook('fanout-nudge.mjs', { ...img, agent_id: 'a' }, env).stdout, '', 'context note: silent in subagents');
 }
 
+// ---- read-guard
+{
+  const env = { CLAUDE_CHECKS_READS: join(TMP, 'reads'), CLAUDE_CHECKS_STATE: join(TMP, 'once-rg') };
+  const f = file('rg.txt', 'one\n'), sid = 'rg' + Date.now();
+  const read = (extra = {}, ti = {}) => JSON.parse(hook('read-guard.mjs', { tool_name: 'Read', session_id: sid, cwd: TMP, tool_input: { file_path: f, ...ti }, ...extra }, env).stdout || '{}').hookSpecificOutput?.permissionDecision || 'allow';
+  eq(read(), 'allow', 'read-guard: first read allowed');
+  eq(read(), 'deny', 'read-guard: unchanged re-read refused');
+  eq(read(), 'allow', 'read-guard: re-issued read goes through');
+  eq(read({}, { offset: 10, limit: 5 }), 'allow', 'read-guard: another range is a new read');
+  eq(read({ agent_id: 'sub1' }), 'allow', 'read-guard: a subagent has its own reads');
+  const g = file('rg2.txt', 'a\n');
+  const read2 = () => JSON.parse(hook('read-guard.mjs', { tool_name: 'Read', session_id: sid, cwd: TMP, tool_input: { file_path: g } }, env).stdout || '{}').hookSpecificOutput?.permissionDecision || 'allow';
+  eq(read2(), 'allow', 'read-guard: second file first read');
+  writeFileSync(g, 'a changed file\n');
+  eq(read2(), 'allow', 'read-guard: changed file allowed');
+  const g3 = file('rg3.txt', 'b\n');
+  const read3 = () => JSON.parse(hook('read-guard.mjs', { tool_name: 'Read', session_id: sid, cwd: TMP, tool_input: { file_path: g3 } }, env).stdout || '{}').hookSpecificOutput?.permissionDecision || 'allow';
+  read3();
+  eq(hook('read-guard.mjs', { session_id: sid, cwd: TMP, source: 'compact' }, env, ['--reset']).status, 0, 'read-guard: reset runs');
+  eq(read3(), 'allow', 'read-guard: after compaction the same read is allowed');
+  eq(hook('read-guard.mjs', 'bad', env).status, 0, 'read-guard: bad stdin fails open');
+}
+
 // ---- hook-health
 {
   const hh = await imp('hook-health.mjs'), cm = await imp('common.mjs');

@@ -11,30 +11,26 @@ export const KIND_MIN = 0.6;   // on the 26-prompt eval every kind hint shown at
 // Per-flag thresholds picked on the same eval (no false positives at these values).
 // Real sessions 16-24.10 (60 judged prompts): implement and review misfired at 0.68-0.82, and behavior_claims
 // filled half of all shown lines with 11 of 25 partly or wholly off; these need more confidence.
-export const KIND_MIN_BY = { implement: 0.85, review: 0.85 };
-export const FLAG_MIN = { needs_current_facts: 0.7, behavior_claims: 0.85, risky: 0.7, heavy_output: 0.85 };
+export const KIND_MIN_BY = { review: 0.85 };
+export const FLAG_MIN = { risky: 0.7 };
 export const PREV_CHARS = 1200;
 export const NOTE_HEADER = 'Jev routing note (fast classifier, advisory; it can be wrong, overrule it with evidence):';
 
 const CLI = join(HERE, 'jev.mjs').replace(/\\/g, '/');
 
-// Each hint names a concrete first step. Agents/skills referenced here ship with llm-config
-// (verify-claims, claim-verifier, heavy-output-runner). Kinds absent here (continue, hold, chat) get no note.
+// Each hint names a concrete first step that the always-loaded core rules do not already state. Kinds and flags
+// the preset still returns but that have no entry here get no note: debug, implement, research, explain,
+// needs_current_facts, behavior_claims and heavy_output only repeated CORE.md (reproduce first, done-check before
+// editing, read the implementation, verify current facts, delegate bulky output), which every adapter loads.
+// Kinds absent here (continue, hold, chat) get no note either.
 export const HINTS = {
-  debug: 'debugging: first reproduce the failure and capture the exact error or log line; name the cause with evidence before proposing a fix',
-  implement: 'implementation: first write down the observable done-check (test, command or output) before editing',
   refactor: 'refactor: first run or name the test that pins current behavior, and rerun it after each step',
   review: `review: first list concrete failing scenarios with file:line; with 5+ findings triage them via \`node ${CLI} preset finding_severity\``,
-  research: 'research: first open a current primary source (official docs, source, changelog) and cite it; do not answer from memory',
   config: 'configuration change: first read and back up the exact target file, then make the smallest edit',
-  explain: 'explanation: first read the implementation (function body and call sites), not just names or comments',
   feedback: 'feedback on your result: first restate what to change and what to keep, then compare against the reference before editing',
 };
 export const FLAGS = {
-  needs_current_facts: 'may depend on facts newer than training data: first check a current source (docs, release notes, installed version)',
-  behavior_claims: 'answer will make behavior claims: first verify them against the implementation or a run; for several claims use the verify-claims skill or the claim-verifier agent',
   risky: 'destructive or outward-facing action in play: if the user has not already named this exact action, confirm it with them first',
-  heavy_output: 'bulky output likely: first hand dumps, screenshot sequences or many-file searches to a subagent (e.g. heavy-output-runner) and keep only its summary',
 };
 
 // Prompts that are not typed by the user: slash commands, harness messages such as <task-notification>,

@@ -1,7 +1,7 @@
 {
   "id": "claude-checks",
   "title": "Deterministic checks for Claude Code (opt-in)",
-  "description": "Rule-based hooks and scripts, no model calls: a fast syntax/control-character check after each file edit, a done-check that sends Claude back once when it changed code after its last test or build, a cached project map at session start, a one-time push back on foreground sleep/poll waits, a once-per-turn reminder to delegate on long solo turns, a hook health note at session start, plus session-stats.mjs (per-session numbers for before/after comparisons) and safe-commit.mjs (commit after attribution, secret and private-pattern checks; terminal only).",
+  "description": "Rule-based hooks and scripts, no model calls: a fast syntax/control-character check after each file edit, a done-check that sends Claude back once when it changed code after its last test or build, a cached project map at session start, a one-time push back on foreground sleep/poll waits, a once-per-turn reminder to delegate on long solo turns, a one-time refusal of re-reads of unchanged files, a hook health note at session start, plus session-stats.mjs (per-session numbers for before/after comparisons) and safe-commit.mjs (commit after attribution, secret and private-pattern checks; terminal only).",
   "group": "extras",
   "default": false,
   "platforms": ["linux", "darwin", "win32"],

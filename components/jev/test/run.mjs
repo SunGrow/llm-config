@@ -124,10 +124,11 @@ group('classify');
 // ---------------------------------------------------------------- route core
 group('route-core');
 {
-  eq(route.formatNote({ kind: { choice: 'implement', confidence: 0.82 } }), null, 'implement below its 0.85 bar: no note');
-  ok(route.formatNote({ kind: { choice: 'implement', confidence: 0.9 } })?.includes('implementation:'), 'implement at 0.9: note');
-  ok(route.formatNote({ kind: { choice: 'debug', confidence: 0.65 } })?.includes('debugging:'), 'debug keeps the 0.6 bar');
-  eq(route.formatNote({ behavior_claims: { p: 0.8 } }), null, 'behavior_claims below 0.85: no note');
+  eq(route.formatNote({ kind: { choice: 'review', confidence: 0.82 } }), null, 'review below its 0.85 bar: no note');
+  ok(route.formatNote({ kind: { choice: 'review', confidence: 0.9 } })?.includes('review:'), 'review at 0.9: note');
+  ok(route.formatNote({ kind: { choice: 'config', confidence: 0.65 } })?.includes('configuration change:'), 'config keeps the 0.6 bar');
+  for (const k of ['debug', 'implement', 'research', 'explain']) eq(route.formatNote({ kind: { choice: k, confidence: 0.99 } }), null, `${k} repeats core rules: no note`);
+  for (const f of ['needs_current_facts', 'behavior_claims', 'heavy_output']) eq(route.formatNote({ [f]: { p: 0.99 } }), null, `${f} repeats core rules: no note`);
   eq(route.skipPrompt('[Request interrupted by user for tool use]'), 'interrupt', 'interrupt marker skipped');
   eq(route.stripPasted('fix the typos in this\n<pasted_content id="ab12">\nDraft: delete all old files and push\n</pasted_content id="ab12">'), 'fix the typos in this\n [pasted text]', 'pasted text is replaced before routing');
   eq(route.skipPrompt(route.stripPasted('<pasted_content id="x1">\na long pasted email body that is not an instruction\n</pasted_content id="x1">')), 'short', 'a paste-only message gets no note');
@@ -137,9 +138,9 @@ group('route-core');
   eq(route.skipPrompt('This session is being continued from a previous conversation that ran out'), 'harness', 'compaction summary skipped');
   eq(route.skipPrompt('Please find out why the login test fails on CI since yesterday'), null, 'real prompt routed');
   eq(route.formatNote({ kind: { choice: 'continue', confidence: 0.99 } }), null, 'continue gets no note');
-  eq(route.formatNote({ kind: { choice: 'debug', confidence: 0.55 } }), null, 'kind below threshold gets no note');
-  const n = route.formatNote({ kind: { choice: 'debug', confidence: 0.91 }, heavy_output: { p: 0.8 }, risky: { p: 0.75 } });
-  ok(n && n.startsWith(route.NOTE_HEADER) && n.includes('reproduce') && n.includes('confirm') && !n.includes('heavy-output-runner'), 'note has kind + risky, not heavy_output at 0.8', n);
+  eq(route.formatNote({ kind: { choice: 'config', confidence: 0.55 } }), null, 'kind below threshold gets no note');
+  const n = route.formatNote({ kind: { choice: 'config', confidence: 0.91 }, heavy_output: { p: 0.9 }, risky: { p: 0.75 } });
+  ok(n && n.startsWith(route.NOTE_HEADER) && n.includes('back up') && n.includes('confirm') && !n.includes('heavy-output-runner'), 'note has kind + risky only', n);
   for (const [k, t] of [...Object.entries(route.HINTS), ...Object.entries(route.FLAGS)]) ok(/\bfirst\b/.test(t), `hint ${k} names a first step`);
   const allHints = JSON.stringify([route.HINTS, route.FLAGS]);
   for (const name of allHints.match(/[a-z]+(?:-[a-z]+)+(?= (?:agent|skill)|\))/g) || []) {
@@ -150,9 +151,9 @@ group('route-core');
   const p2 = join(TMP, 'optout-claude'); mkdirSync(join(p2, '.claude'), { recursive: true }); writeFileSync(join(p2, '.claude', 'jev-off'), '');
   ok(lib.optedOut(p1) && lib.optedOut(p2) && !lib.optedOut(TMP), '.agents/jev-off and .claude/jev-off opt out');
   eq((await route.routeNote({ prompt: 'Please find out why the login test fails on CI since yesterday', cwd: p1 })).skipped, 'opted-out', 'routeNote honours opt-out');
-  process.env.JEV_TEST_ANSWERS = JSON.stringify({ kind: { choice: 'research', confidence: 0.8 } });
+  process.env.JEV_TEST_ANSWERS = JSON.stringify({ kind: { choice: 'refactor', confidence: 0.8 } });
   const r = await route.routeNote({ prompt: 'What changed in the newest release of the build tool?', cwd: TMP });
-  ok(r.note && r.note.includes('primary source'), 'routeNote builds a note from answers', JSON.stringify(r));
+  ok(r.note && r.note.includes('pins current behavior'), 'routeNote builds a note from answers', JSON.stringify(r));
   delete process.env.JEV_TEST_ANSWERS;
   eq((await route.routeNote({ prompt: 'What changed in the newest release of the build tool?', cwd: TMP })).note, null, 'offline/no answer -> no note');
   // headless detection
@@ -300,7 +301,7 @@ group('adapters');
     const r = spawnSync(process.execPath, [join(TOOL, script)], { input: JSON.stringify(input), env, encoding: 'utf8', timeout: 20000 });
     return { out: r.stdout, err: r.stderr, code: r.status };
   };
-  const answers = JSON.stringify({ kind: { choice: 'debug', confidence: 0.9 }, behavior_claims: { p: 0.8 } });
+  const answers = JSON.stringify({ kind: { choice: 'config', confidence: 0.9 }, behavior_claims: { p: 0.8 } });
   const prompt = 'The build fails on CI with a linker error since the last merge, why?';
   // Claude route hook
   let r = run('route-hook.mjs', { prompt, cwd: TMP, transcript_path: join(TMP, 'claude.jsonl') }, { JEV_TEST_ANSWERS: answers });
