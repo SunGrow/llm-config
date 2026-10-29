@@ -30,7 +30,8 @@
 ## Context and delegation
 
 - Load only the files and instruction packs the current decision needs.
-- Hand any step whose bulky output you will not quote (many-file searches, log scans, large dumps, screenshot runs) to a read-only subagent that returns a short evidence summary.
+- Hand any step whose bulky output you will not quote (many-file searches, log scans, large dumps, screenshot runs) to a read-only subagent that returns a short evidence summary. When a task splits into parts that do not need each other's results, run them as parallel subagents without waiting to be asked.
+- Before a command that may run longer than a minute, prove it on the smallest input first, then run the full command in the background instead of waiting on it in the foreground.
 - Model roles: strong model for the lead thread, synthesis, and verification; mid model for one briefed, bounded step; small model for checklist sweeps. Give every subagent explicit scope, a done condition, and a role-fitting model. Treat its report as evidence to check: re-verify what a change rests on.
 - Fit effort and shape to the task: deliver the requested shape (list, table, file) first; say what you skip and why; keep accepted criteria settled unless reopened. If you stop for a rule, name it; do not invent restrictions.
 

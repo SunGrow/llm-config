@@ -13,6 +13,33 @@
             "timeout": 20
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "{NODE}",
+            "args": [
+              "{AGENTS_HOME}/tools/checks/fanout-nudge.mjs"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "{NODE}",
+            "args": [
+              "{AGENTS_HOME}/tools/checks/shell-guard.mjs"
+            ],
+            "timeout": 10
+          }
+        ]
       }
     ],
     "Stop": [

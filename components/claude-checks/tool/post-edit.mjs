@@ -3,7 +3,8 @@
 // error straight back to Claude. Silent when the file is fine, unknown, or the check tool is missing.
 import { readFileSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { basename, extname } from 'node:path';
+import { basename, extname, dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { optedOut, readStdinJson } from './common.mjs';
 
 const MAX_BYTES = 2 << 20;
@@ -39,6 +40,10 @@ export function checkFile(path) {
   } else if (ext === '.py') {
     const r = run(process.platform === 'win32' ? 'python' : 'python3', ['-m', 'py_compile', path]);
     if (r && r.status === 1 && /Error/.test(r.stderr)) problems.push('py_compile: ' + r.stderr.trim().split('\n').slice(-4).join('\n'));
+  } else if (ext === '.lua') {
+    // luac -p if installed, else Neovim's built-in LuaJIT (about 0.1 s).
+    const r = run('luac', ['-p', path]) || run('nvim', ['--clean', '--headless', '-l', join(dirname(fileURLToPath(import.meta.url)), 'lua-check.lua'), path]);
+    if (r && r.status !== 0 && (r.stderr || r.stdout)) problems.push('Lua syntax: ' + (r.stderr || r.stdout).trim().split('\n').slice(0, 4).join('\n'));
   } else if (ext === '.sh' || ext === '.bash') {
     const r = run('bash', ['-n', path]);
     if (r && r.status === 2 && r.stderr) problems.push('bash -n: ' + r.stderr.trim().split('\n').slice(0, 4).join('\n'));

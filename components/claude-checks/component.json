@@ -1,12 +1,12 @@
 {
   "id": "claude-checks",
   "title": "Deterministic checks for Claude Code (opt-in)",
-  "description": "Rule-based hooks and scripts, no model calls: a fast syntax/control-character check after each file edit, a done-check that sends Claude back once when it changed code after its last test or build, a cached project map at session start, plus session-stats.mjs (per-session numbers for before/after comparisons) and safe-commit.mjs (commit after attribution, secret and private-pattern checks; terminal only).",
+  "description": "Rule-based hooks and scripts, no model calls: a fast syntax/control-character check after each file edit, a done-check that sends Claude back once when it changed code after its last test or build, a cached project map at session start, a one-time push back on foreground sleep/poll waits, a once-per-turn reminder to delegate on long solo turns, plus session-stats.mjs (per-session numbers for before/after comparisons) and safe-commit.mjs (commit after attribution, secret and private-pattern checks; terminal only).",
   "group": "extras",
   "default": false,
   "platforms": ["linux", "darwin", "win32"],
   "requiresBinaries": ["node"],
-  "postInstall": "Claude checks: start a new Claude Code session to load the hooks. Opt out per project with .claude/checks-off, everywhere with CLAUDE_CHECKS=0. Project maps are cached in ~/.agents/cache/project-maps/. Scripts in ~/.agents/tools/checks/: session-stats.mjs [--days 7] [--project x]; safe-commit.mjs -F msg [-C repo] [--push] [--sign] (run in your own terminal; add private regexes to ~/.config/llm-config/private-patterns).",
+  "postInstall": "Claude checks: start a new Claude Code session to load the hooks. Tune the delegate reminder with CLAUDE_CHECKS_FANOUT_AT (default 40 tool calls). Opt out per project with .claude/checks-off, everywhere with CLAUDE_CHECKS=0. Project maps are cached in ~/.agents/cache/project-maps/. Scripts in ~/.agents/tools/checks/: session-stats.mjs [--days 7] [--project x]; safe-commit.mjs -F msg [-C repo] [--push] [--sign] (run in your own terminal; add private regexes to ~/.config/llm-config/private-patterns).",
   "actions": [
     { "type": "copy", "from": "tool/", "to": "{AGENTS_HOME}/tools/checks/" },
     { "type": "json-merge", "from": "settings.checks.json.tmpl", "to": "{CLAUDE_HOME}/settings.json", "when": "claude" }

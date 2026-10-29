@@ -1,6 +1,6 @@
 # Collaboration and delegation
 
-Use one agent by default. Add subagents when independent, read-heavy, specialized, or cleanly partitioned work outweighs the coordination cost. Shared sequential reasoning stays with one owner.
+Decide on delegation yourself, without waiting to be asked. Delegate when the work has parts that do not need each other's results: separate areas to explore, separate files or modules to change, a long build or test that can run beside other work, or a sweep whose bulky output you will not quote. Keep work on one thread when each step needs the previous step's result, when the parts share files, or when briefing would cost more than doing it. Shared sequential reasoning stays with one owner.
 
 ## Topology
 

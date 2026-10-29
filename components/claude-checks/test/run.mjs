@@ -123,6 +123,47 @@ const file = (name, text) => { const p = join(TMP, 'src', name); mkdirSync(dirna
   eq(hook('project-map.mjs', 'bad', {}, ['--hook']).status, 0, 'project-map hook: bad stdin fails open');
 }
 
+// ---- shell-guard
+{
+  const sg = await imp('shell-guard.mjs');
+  for (const c of ['sleep 240; cat log', 'make & sleep 90; tail out', 'until grep -q done log; do sleep 5; done', 'for i in $(seq 1 30); do [ -f x ] && break; sleep 2; done',
+    '$d=(Get-Date).AddSeconds(300); while ((Get-Date) -lt $d) { Start-Sleep 5 }', 'do { Start-Sleep -Seconds 5 } until (Test-Path x)', 'Start-Sleep -Seconds 60'])
+    ok(sg.isPollWait(c), 'shell-guard: flags ' + c);
+  for (const c of ['npm test', 'sleep 2; ls', 'Start-Sleep 10', 'for k in a b c; do tmux send-keys $k; sleep 1; done', "python - <<'EOF'\nwhile True:\n    time.sleep(5)\nEOF\necho ok", 'grep -n "sleep 300" notes.md'])
+    ok(!sg.isPollWait(c), 'shell-guard: passes ' + c);
+  const env = { CLAUDE_CHECKS_STATE: join(TMP, 'once-sg') };
+  const cmd = 'until [ -f done ]; do sleep 5; done ' + Date.now();
+  const r1 = hook('shell-guard.mjs', { tool_name: 'Bash', cwd: TMP, tool_input: { command: cmd } }, env);
+  ok(JSON.parse(r1.stdout || '{}').hookSpecificOutput?.permissionDecision === 'deny', 'shell-guard hook: denies first time', r1.stdout + r1.stderr);
+  eq(hook('shell-guard.mjs', { tool_name: 'Bash', cwd: TMP, tool_input: { command: cmd } }, env).stdout, '', 'shell-guard hook: same command passes on re-issue');
+  eq(hook('shell-guard.mjs', { tool_name: 'Bash', cwd: TMP, tool_input: { command: cmd + ' x', run_in_background: true } }, env).stdout, '', 'shell-guard hook: background passes');
+  eq(hook('shell-guard.mjs', 'bad', env).status, 0, 'shell-guard hook: bad stdin fails open');
+}
+
+// ---- fanout-nudge
+{
+  const fn = await imp('fanout-nudge.mjs');
+  const user = (t) => ({ type: 'user', uuid: 'u-' + t, message: { content: t } });
+  const call = (i, name = 'Bash') => ({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 't' + i, name, input: {} }] } });
+  const calls = (n, from = 0) => Array.from({ length: n }, (_, i) => call(from + i));
+  eq(fn.turnState([user('old'), ...calls(50), user('new'), ...calls(3, 100)]), { calls: 3, delegated: false, promptId: 'u-new' }, 'fanout: counts the current turn only');
+  eq(fn.turnState([user('p'), ...calls(5), call(9, 'Agent')]).delegated, true, 'fanout: an Agent call counts as delegated');
+  const tr = join(TMP, 'fan.jsonl');
+  writeFileSync(tr, [user('go'), ...calls(fn.NUDGE_AT)].map(e => JSON.stringify(e)).join('\n') + '\n');
+  const env = { CLAUDE_CHECKS_STATE: join(TMP, 'once-fan') };
+  const inp = { transcript_path: tr, session_id: 's' + Date.now(), cwd: TMP, tool_name: 'Bash' };
+  const r1 = hook('fanout-nudge.mjs', inp, env);
+  ok(JSON.parse(r1.stdout || '{}').hookSpecificOutput?.additionalContext === fn.NOTE, 'fanout hook: nudges at the threshold', r1.stdout + r1.stderr);
+  eq(hook('fanout-nudge.mjs', inp, env).stdout, '', 'fanout hook: once per turn');
+  eq(hook('fanout-nudge.mjs', { ...inp, session_id: 'x' + Date.now(), agent_id: 'a1' }, env).stdout, '', 'fanout hook: silent inside a subagent');
+}
+
+// ---- Lua syntax (needs luac or nvim)
+if (spawnSync('nvim', ['--version']).status === 0 || spawnSync('luac', ['-v']).status === 0) {
+  eq(pe.checkFile(file('ok.lua', 'local x = 1\nreturn x\n')), [], 'lua: valid file passes');
+  ok(pe.checkFile(file('bad.lua', 'local x = \n')).some(p => p.startsWith('Lua syntax')), 'lua: syntax error reported');
+} else console.log('skip lua: no nvim or luac');
+
 // ---- manifest
 {
   const c = JSON.parse(readFileSync(join(COMP, 'component.json'), 'utf8'));
