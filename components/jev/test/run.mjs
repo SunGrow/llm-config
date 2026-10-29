@@ -385,6 +385,53 @@ group('opencode');
   ok(badCli.ok === false && /decide-cli/.test(badCli.error?.message), 'decide-cli: bad input gives an error result, not a crash', JSON.stringify(badCli));
 }
 
+// ---------------------------------------------------------------- recall
+group('recall');
+{
+  const rc = await import(pathToFileURL(join(TOOL, 'recall-core.mjs')).href);
+  const u = (content) => JSON.stringify({ type: 'user', message: { content } });
+  const a = (...content) => JSON.stringify({ type: 'assistant', message: { content } });
+  const file = join(TMP, 'session.jsonl');
+  writeFileSync(file, [
+    u('Why did the installer skip saving the key?'),
+    a({ type: 'text', text: 'It printed "Nothing to change" and exited before the save step.' }, { type: 'tool_use', name: 'Bash' }),
+    u('<task-notification>harness text</task-notification>'),
+    JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', content: 'tool output must not appear' }] } }),
+    u('This session is being continued from a previous conversation that ran out of context.'),
+    u('Сколько стоил один вызов модели решений за день работы?'),
+    a({ type: 'text', text: 'Все 45 вызовов стоили 0.0024 доллара.' }),
+    u('Write a long report please.'),
+    a({ type: 'text', text: 'x'.repeat(rc.MAX_CHARS + 100) }),
+    'not json',
+  ].join('\n'));
+  const { chunks, compactions } = rc.chunkTranscript(file);
+  eq(compactions, [5], 'recall: compaction line found');
+  eq(chunks.map(c => c.id.split(':')[1]), ['1', '6', '8', '8.1'], 'recall: turns, harness skipped, long turn split');
+  ok(chunks[0].text.includes('[tool: Bash]') && !chunks.some(c => /harness text|must not appear/.test(c.text)), 'recall: tool calls marked, tool output and harness text dropped');
+  ok(chunks[3].text.startsWith('(cont.) ') && chunks[0].end === 2, 'recall: continuation prefix and line range');
+  const bm = rc.bm25Index(chunks.map(c => c.text));
+  eq(bm('сколько стоили вызовы')[0], 1, 'recall: BM25 ranks Cyrillic match first');
+  eq(bm('installer saving key')[0], 0, 'recall: BM25 ranks Latin match first');
+  let r = await rc.recall('installer key', chunks, { k: 2, local: true });
+  ok(r.via === 'bm25' && r.hits.length === 2 && r.hits[0] === chunks[0] && !r.note, 'recall: local mode is BM25 only');
+  r = await rc.recall('installer key', chunks, { k: 1 });
+  ok(r.via === 'bm25' && /JEV_OFFLINE/.test(r.note || '') && r.hits[0] === chunks[0], 'recall: rerank failure falls back to BM25 with a note');
+  const cli = spawnSync(process.execPath, [join(TOOL, 'recall.mjs'), 'why was the key not saved', '--file', file, '--k', '1', '--local'], { encoding: 'utf8', cwd: TMP, timeout: 20000 });
+  ok(cli.status === 0 && cli.stdout.includes('via bm25') && cli.stdout.includes(`lines 1-2`), 'recall CLI: prints ranked turn with lines', cli.stdout + cli.stderr);
+  eq(spawnSync(process.execPath, [join(TOOL, 'recall.mjs'), 'q'], { encoding: 'utf8' }).status, 2, 'recall CLI: usage error without --file');
+  const hook = (input, extra = {}) => spawnSync(process.execPath, [join(TOOL, 'recall-hook.mjs')], { input: typeof input === 'string' ? input : JSON.stringify(input), env: { ...process.env, ...extra }, encoding: 'utf8', timeout: 20000 });
+  let h = hook({ hook_event_name: 'SessionStart', source: 'compact', transcript_path: file, cwd: TMP });
+  ok(h.status === 0 && h.stdout.includes('recall.mjs') && h.stdout.includes(file.replace(/\\/g, '/')), 'recall hook: names CLI and transcript', h.stdout + h.stderr);
+  eq(hook({ transcript_path: file, cwd: TMP }, { JEV_HOOK: '0' }).stdout, '', 'recall hook: JEV_HOOK=0 silent');
+  mkdirSync(join(TMP, 'off', '.claude'), { recursive: true }); writeFileSync(join(TMP, 'off', '.claude', 'jev-off'), '');
+  eq(hook({ transcript_path: file, cwd: join(TMP, 'off') }).stdout, '', 'recall hook: project opt-out silent');
+  h = hook('not json');
+  ok(h.status === 0 && h.stdout === '', 'recall hook: bad stdin fails open');
+  const m = JSON.parse(readFileSync(join(dirname(COMP), 'jev-recall-claude', 'component.json'), 'utf8'));
+  ok(m.requires.includes('jev') && m.default === false, 'recall component: requires jev, opt-in');
+  for (const x of m.actions) ok(existsSync(join(dirname(COMP), 'jev-recall-claude', x.from)), 'recall component: source exists ' + x.from);
+}
+
 // ---------------------------------------------------------------- manifests
 group('manifest');
 {

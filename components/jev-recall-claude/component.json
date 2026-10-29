@@ -1,0 +1,14 @@
+{
+  "id": "jev-recall-claude",
+  "title": "Transcript recall after compaction in Claude Code (opt-in)",
+  "description": "After Claude Code compacts a session, a SessionStart hook tells Claude how to recall earlier turns by question with recall.mjs (OpenRouter rerank model, local BM25 fallback). On a 30-question benchmark over a compacted session (bench/recall), Sonnet answered correctly with half the turns, about 27% lower cost and half the median time compared with searching the transcript itself.",
+  "group": "extras",
+  "requires": ["jev"],
+  "default": false,
+  "platforms": ["linux", "darwin", "win32"],
+  "requiresBinaries": ["node"],
+  "postInstall": "Transcript recall enabled for Claude Code (SessionStart hook on compaction; the hook itself makes no network call). Each recall sends the session's turns, after secret redaction, to OpenRouter's rerank endpoint (voyageai/rerank-2.5 by default, about $0.01 per question for a long session; change with JEV_RECALL_MODEL). Use --local for BM25 only. Opt out per project with .claude/jev-off (recall then stays local), everywhere with JEV_HOOK=0. Manual use: node \"<JEV_HOME>/recall.mjs\" \"<question>\" --file <transcript.jsonl> [--project] [--k 5].",
+  "actions": [
+    { "type": "json-merge", "from": "settings.recall.json.tmpl", "to": "{CLAUDE_HOME}/settings.json", "when": "claude" }
+  ]
+}

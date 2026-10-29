@@ -71,6 +71,7 @@ is kept, the installer only manages marked blocks and the JSON keys it added.
 | `kilo`, `goose`, `kiro`, `cline`, `devin` | Global rules for Kilo Code, Goose, Kiro, Cline, Devin Desktop (ex-Windsurf, compact version under its 6,000-char cap) |
 | `jev` (optional) | Jev decision model hooks: a risk check before git commit/push and destructive commands (Claude Code, Codex, opencode) and an advisory routing note on each prompt (Codex, opencode). Needs an OpenRouter key, ~$0.0001 per call. See `components/jev/SKILL.md.tmpl` |
 | `jev-route-claude` (optional) | The routing note in Claude Code too. Off by default: it changed no outcomes for Opus or Haiku in `bench/jev-opus` |
+| `jev-recall-claude` (optional) | After compaction, Claude Code is told how to recall earlier turns by question (`recall.mjs`, OpenRouter rerank model, local BM25 fallback, ~$0.01 per question). In `bench/recall` it halved turns and time on recall questions |
 | `unreal` (optional) | Unreal Engine pack and generic UE C++ rules |
 
 Always-loaded size after install: about 4.5k characters per tool, plus short skill and agent descriptions.
