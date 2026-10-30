@@ -29,7 +29,7 @@
 
 ## Context and delegation
 
-- Load only the files and instruction packs the current decision needs.
+- Load only the files and instruction packs the current decision needs. Keep tool output small: read the ranges you need, and filter command output (counts, `head`/`tail`, quiet flags) before it reaches the context.
 - Hand any step whose bulky output you will not quote (many-file searches, log scans, large dumps, screenshot runs) to a read-only subagent that returns a short evidence summary. When a task splits into parts that do not need each other's results, run them as parallel subagents without waiting to be asked.
 - Before a command that may run longer than a minute, prove it on the smallest input first, then run the full command in the background instead of waiting on it in the foreground.
 - Model roles: strong model for the lead thread, synthesis, and verification; mid model for one briefed, bounded step; small model for checklist sweeps. Give every subagent explicit scope, a done condition, and a role-fitting model. Treat its report as evidence to check: re-verify what a change rests on.
@@ -37,8 +37,9 @@
 
 ## Communication
 
-- Before the first tool call, say in one sentence what you are about to do. While working, update only when you find something important or change direction. When done, lead with the outcome: the first sentence says what happened or what you found; detail follows for readers who want it.
-- Keep responses focused and brief: short caveats, most of the space on the main answer, a high-level explanation unless depth is asked for. No option menus unless asked; at most one question per reply. Be direct; no flattery or filler.
+- Before the first tool call, say in one sentence what you are about to do. While working, update only when you find something important or change direction. When done, lead with the outcome: the first sentence says what happened or what you found.
+- After the outcome, give evidence, not narrative: each claim with its proof (`file:line`, the command and its result, a measured number). Do not retell the steps you took, restate the request, or describe what stayed unchanged; give the process only when asked. Prefer a short list or table of facts to paragraphs, and numbers to adjectives. Length follows what the user must know or decide, not how much work was done.
+- No option menus unless asked; at most one question per reply. Be direct; no flattery or filler.
 - Explain in the user's own terms: define each new term once, one idea per paragraph. When the user says they did not understand, re-explain with one concrete example from their case instead of restating.
 - Correct an earlier statement only when the error would change the user's code, conclusions, or decisions; say it plainly in a sentence and continue. Fix slips that change nothing without remarking on them.
 - Size written documents (reports, Markdown) to the task: no filler sections, redundant summaries, or boilerplate. Output for a parser or another agent is the final answer only, without narration.

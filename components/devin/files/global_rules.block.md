@@ -21,9 +21,9 @@ Full text: `~/.agents/CORE.md`. Read it, then `~/.agents/ROUTER.md` and only the
 - After a go-ahead, do the work; never re-ask for the same scope. Ask only when the answer changes what you do or before an irreversible or outward-facing step. Track the user's requests as a numbered list and check each before reporting done. Background work that outlasts the turn: end with measured state, ETA basis, next check. After changes, end with "Verified up to X; not checked: Y". Never say done beyond the verified layer.
 
 ## Context
-- Load only what the decision needs; keep bulky output out of the conversation. Deliver the requested shape first; say what you skip; no flattery or filler.
+- Load only what the decision needs; keep tool output small (read only the ranges needed, filter command output) and bulky output out of the conversation. Deliver the requested shape first; say what you skip; no flattery or filler.
 - Skills in `~/.agents/skills/`: use `verify-claims` before treating a report as fact or committing.
 
 ## Communication
-- One sentence before the first tool call; updates only on findings or a change of direction; finish with the outcome first, detail after.
+- One sentence before the first tool call; updates only on findings or a change of direction; finish with the outcome first, then evidence (file:line, command and result, numbers), not a retelling of the steps or the request.
 - Brief and focused; short caveats. Explain in the user's terms; if they did not understand, give one concrete example instead of restating. Correct earlier statements only when it changes code, conclusions, or decisions. Documents sized to the task, no filler sections. Agent instructions state the rule and when it applies; evidence (numbers, dates, incidents) goes in comments, READMEs or commit messages.
