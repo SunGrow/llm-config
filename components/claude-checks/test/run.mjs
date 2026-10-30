@@ -154,25 +154,56 @@ const file = (name, text) => { const p = join(TMP, 'src', name); mkdirSync(dirna
   writeFileSync(tr, [user('go'), ...calls(fn.NUDGE_AT)].map(e => JSON.stringify(e)).join('\n') + '\n');
   const env = { CLAUDE_CHECKS_STATE: join(TMP, 'once-fan') };
   const inp = { transcript_path: tr, session_id: 's' + Date.now(), cwd: TMP, tool_name: 'Bash' };
-  const r1 = hook('fanout-nudge.mjs', inp, env);
+  const r1 = hook('post-tool.mjs', inp, env);
   ok(JSON.parse(r1.stdout || '{}').hookSpecificOutput?.additionalContext === fn.NOTE, 'fanout hook: nudges at the threshold', r1.stdout + r1.stderr);
-  eq(hook('fanout-nudge.mjs', inp, env).stdout, '', 'fanout hook: once per turn');
-  eq(hook('fanout-nudge.mjs', { ...inp, session_id: 'x' + Date.now(), agent_id: 'a1' }, env).stdout, '', 'fanout hook: silent inside a subagent');
+  eq(hook('post-tool.mjs', inp, env).stdout, '', 'fanout hook: once per turn');
+  eq(hook('post-tool.mjs', { ...inp, session_id: 'x' + Date.now(), agent_id: 'a1' }, env).stdout, '', 'fanout hook: silent inside a subagent');
 }
 
-// ---- context notes (inside fanout-nudge)
+// ---- context notes (inside post-tool)
 {
   const cn = await imp('context-note.mjs');
   const env = { CLAUDE_CHECKS_COUNTERS: join(TMP, 'img'), CLAUDE_CHECKS_STATE: join(TMP, 'once-cn') };
   const sid = 'cn' + Date.now();
   const img = { tool_name: 'mcp__Claude_Browser__computer', session_id: sid, cwd: TMP, tool_response: [{ type: 'image', source: {} }] };
-  const outs = [1, 2, 3].map(() => hook('fanout-nudge.mjs', img, env).stdout);
+  const outs = [1, 2, 3].map(() => hook('post-tool.mjs', img, env).stdout);
   ok(outs[0] === '' && outs[1] === '' && outs[2].includes('3 image/screenshot results'), 'context note: every third image', JSON.stringify(outs));
-  const big = hook('fanout-nudge.mjs', { tool_name: 'Bash', session_id: sid, cwd: TMP, tool_response: { stdout: 'x'.repeat(cn.TEXT_LIMIT + 10) } }, env).stdout;
-  ok(big.includes('KB of text'), 'context note: large text result', big);
-  eq(hook('fanout-nudge.mjs', { tool_name: 'Bash', session_id: sid, cwd: TMP, tool_response: { stdout: 'small' } }, env).stdout, '', 'context note: small result silent');
-  eq(hook('fanout-nudge.mjs', { tool_name: 'Write', session_id: sid, cwd: TMP, tool_response: 'x'.repeat(cn.TEXT_LIMIT + 10) }, env).stdout, '', 'context note: other tools ignored');
-  eq(hook('fanout-nudge.mjs', { ...img, agent_id: 'a' }, env).stdout, '', 'context note: silent in subagents');
+  eq(hook('post-tool.mjs', { tool_name: 'Bash', session_id: sid, cwd: TMP, tool_response: { stdout: 'small' } }, env).stdout, '', 'context note: small result silent');
+  eq(hook('post-tool.mjs', { ...img, agent_id: 'a' }, env).stdout, '', 'context note: silent in subagents');
+}
+
+// ---- spill (inside post-tool)
+{
+  const sp = await imp('spill.mjs');
+  const env = { CLAUDE_CHECKS_SPILL_DIR: join(TMP, 'spill'), CLAUDE_CHECKS_STATE: join(TMP, 'once-sp') };
+  const sid = 'sp' + Date.now();
+  const big = Array.from({ length: 2000 }, (_, i) => `line ${i} ` + 'x'.repeat(10)).join('\n');
+  const post = (input) => JSON.parse(hook('post-tool.mjs', { session_id: sid, cwd: TMP, tool_use_id: 'toolu_' + Math.random().toString(36).slice(2), ...input }, env).stdout || '{}').hookSpecificOutput || {};
+  let o = post({ tool_name: 'Bash', tool_response: { stdout: big, stderr: '', interrupted: false, isImage: false, noOutputExpected: false } });
+  const u = o.updatedToolOutput, path = u?.stdout?.match(/Full output \(\d+ characters\): (\S+)/)?.[1];
+  ok(u && u.stdout.length < 4000 && u.stdout.startsWith('line 0 ') && u.stdout.endsWith(big.slice(-50)), 'spill: Bash stdout keeps head and tail only', JSON.stringify(o).slice(0, 300));
+  eq(Object.keys(u || {}).sort(), ['interrupted', 'isImage', 'noOutputExpected', 'stderr', 'stdout'], 'spill: Bash result keeps its shape');
+  ok(path && readFileSync(path, 'utf8').includes('line 1999 '), 'spill: full output saved to the named file', path);
+  ok(!o.additionalContext, 'spill: no size note once spilled');
+  eq(post({ tool_name: 'Bash', tool_response: { stdout: 'x'.repeat(sp.SPILL_AT - 10), stderr: '' } }).updatedToolOutput, undefined, 'spill: under the threshold untouched');
+  o = post({ tool_name: 'mcp__blueprint-extractor__extract_blueprint', tool_response: [{ type: 'text', text: big }, { type: 'image', source: { data: 'abc' } }] });
+  ok(Array.isArray(o.updatedToolOutput) && o.updatedToolOutput[0].text.length < 4000 && o.updatedToolOutput[1].source.data === 'abc', 'spill: MCP text shrinks, images untouched', JSON.stringify(o).slice(0, 200));
+  o = post({ tool_name: 'Glob', tool_response: { filenames: Array.from({ length: 900 }, (_, i) => `D:/proj/src/some/deep/folder/file${i}.ts`), numFiles: 900, truncated: false } });
+  ok(o.updatedToolOutput?.filenames.length === 51 && /850 more entries/.test(o.updatedToolOutput.filenames[50]) && o.updatedToolOutput.numFiles === 900, 'spill: long file lists keep the first entries', JSON.stringify(o).slice(0, 200));
+  eq(post({ tool_name: 'Agent', tool_response: { content: [{ type: 'text', text: big }] } }).updatedToolOutput, undefined, 'spill: subagent reports untouched');
+  eq(post({ tool_name: 'mcp__visualize__read_me', tool_response: [{ type: 'text', text: big }] }).updatedToolOutput, undefined, 'spill: instruction pages untouched');
+  const content = Array.from({ length: 4000 }, (_, i) => `${i + 1}\tconst value${i} = ${i};`).join('\n');
+  o = post({ tool_name: 'Read', tool_response: { type: 'text', file: { filePath: 'D:/x.ts', content, numLines: 4000, startLine: 1, totalLines: 4000 } } });
+  const rc = o.updatedToolOutput?.file?.content || '';
+  const m = rc.match(/lines 1-(\d+) of 4000 shown\. Continue with Read offset=(\d+)/);
+  ok(rc.length < sp.READ_AT + 400 && m && Number(m[2]) === Number(m[1]) + 1 && rc.includes(`${m[1]}\tconst value${m[1] - 1} =`), 'spill: Read keeps a contiguous head and names the next offset', rc.slice(-200));
+  eq(post({ tool_name: 'Read', tool_response: { type: 'text', file: { filePath: 'D:/y.ts', content: 'short', numLines: 1, startLine: 1, totalLines: 1 } } }).updatedToolOutput, undefined, 'spill: short Read untouched');
+  const mid = content.slice(0, sp.READ_AT_SUB + 5000);
+  eq(post({ tool_name: 'Read', tool_response: { type: 'text', file: { filePath: 'D:/z.ts', content: mid, numLines: 1, startLine: 1, totalLines: 4000 } } }).updatedToolOutput, undefined, 'spill: main-thread Read under its cap untouched');
+  const sr = post({ tool_name: 'Read', agent_id: 'sub1', tool_response: { type: 'text', file: { filePath: 'D:/z.ts', content: mid, numLines: 1, startLine: 1, totalLines: 4000 } } }).updatedToolOutput?.file?.content || '';
+  ok(sr.length < sp.READ_AT_SUB + 400 && sr.includes(`cut at ${sp.READ_AT_SUB} characters`), 'spill: subagent Read gets the lower cap', sr.slice(-160));
+  eq(post({ tool_name: 'Read', agent_id: 'sub1', tool_input: { file_path: 'D:/z.ts', limit: 4000 }, tool_response: { type: 'text', file: { filePath: 'D:/z.ts', content: mid, numLines: 1, startLine: 1, totalLines: 4000 } } }).updatedToolOutput, undefined, 'spill: subagent Read with an explicit range keeps the main-thread cap');
+  eq(post({ tool_name: 'Read', agent_id: 'sub1', tool_response: { type: 'image', file: { base64: 'x'.repeat(200000), type: 'image/png' } } }).updatedToolOutput, undefined, 'spill: subagent image Read untouched');
 }
 
 // ---- read-guard
