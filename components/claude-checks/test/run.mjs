@@ -229,6 +229,39 @@ const file = (name, text) => { const p = join(TMP, 'src', name); mkdirSync(dirna
   eq(hook('read-guard.mjs', 'bad', env).status, 0, 'read-guard: bad stdin fails open');
 }
 
+// ---- Grok (runs ~/.claude/settings.json hooks with its own names and shapes; payloads as Grok 1.0.70 sends them)
+{
+  const sp = await imp('spill.mjs');
+  const env = { CLAUDE_CHECKS_SPILL_DIR: join(TMP, 'spill-g'), CLAUDE_CHECKS_STATE: join(TMP, 'once-g'), CLAUDE_CHECKS_READS: join(TMP, 'reads-g') };
+  const sid = 'g' + Date.now();
+  const grok = (event, toolName, toolInput, extra = {}) => ({ hookEventName: event.replace(/[A-Z]/g, (c, i) => (i ? '_' : '') + c.toLowerCase()), hook_event_name: event, sessionId: sid, session_id: sid, cwd: TMP,
+    toolName, tool_name: toolName, toolInput, tool_input: toolInput, toolUseId: 'call_' + Math.random().toString(36).slice(2), tool_use_id: 'call_x' + Math.random().toString(36).slice(2), ...extra });
+  const out = (r) => JSON.parse(r.stdout || '{}').hookSpecificOutput || {};
+  const big = Array.from({ length: 800 }, (_, i) => `row ${i} ` + 'y'.repeat(10)).join('\n');
+  const bash = (text) => ({ type: 'Bash', output: [], output_for_prompt: text, exit_code: 0, command: 'x', truncated: false, signal: null, timed_out: false });
+  let o = out(hook('post-tool.mjs', grok('PostToolUse', 'run_terminal_command', { command: 'x' }, { toolResult: bash(big), tool_response: bash(big) }), env));
+  const path = typeof o.updatedToolOutput === 'string' && o.updatedToolOutput.match(/Full output \(\d+ characters\): (\S+)/)?.[1];
+  ok(path && o.updatedToolOutput.length < 4000 && readFileSync(path, 'utf8').includes('row 799 '), 'grok: large shell output spills as text with the saved path', JSON.stringify(o).slice(0, 200));
+  eq(out(hook('post-tool.mjs', grok('PostToolUse', 'run_terminal_command', { command: 'x' }, { tool_response: bash('small') }), env)).updatedToolOutput, undefined, 'grok: small shell output untouched');
+  const grep = { type: 'GrepSearch', stdout: [...Buffer.from(big)], stderr: [], exit_code: 0, match_count: 800 };
+  ok(String(out(hook('post-tool.mjs', grok('PostToolUse', 'grep', { pattern: 'row' }, { tool_response: grep }), env)).updatedToolOutput).includes('row 0 '), 'grok: grep bytes decoded and spilled');
+  const content = Array.from({ length: 4000 }, (_, i) => `${i + 1}→const v${i} = ${i};`).join('\n');
+  const rf = (c) => ({ type: 'ReadFile', FileContent: { content: c, content_concise: c, absolute_path: join(TMP, 'big.ts') } });
+  o = out(hook('post-tool.mjs', grok('PostToolUse', 'read_file', { target_file: 'big.ts' }, { tool_response: rf(content) }), env));
+  ok(typeof o.updatedToolOutput === 'string' && o.updatedToolOutput.length < sp.READ_AT + 400 && o.updatedToolOutput.includes(`cut at ${sp.READ_AT}`), 'grok: long read cut at the main cap', String(o.updatedToolOutput).slice(-160));
+  o = out(hook('post-tool.mjs', grok('PostToolUse', 'read_file', { target_file: 'big.ts' }, { tool_response: rf(content.slice(0, sp.READ_AT_SUB + 5000)), subagentType: 'heavy-output-runner' }), env));
+  ok(String(o.updatedToolOutput).includes(`cut at ${sp.READ_AT_SUB}`), 'grok: subagent read gets the lower cap');
+  eq(out(hook('post-tool.mjs', grok('PostToolUse', 'spawn_subagent', { prompt: 'p' }, { tool_response: { type: 'SubagentCompleted', output: big } }), env)).updatedToolOutput, undefined, 'grok: subagent reports untouched');
+  const cmd = 'until [ -f done ]; do sleep 5; done ' + Date.now();
+  eq(out(hook('shell-guard.mjs', grok('PreToolUse', 'run_terminal_command', { command: cmd }), env)).permissionDecision, 'deny', 'grok: shell-guard denies a poll loop');
+  file('grok-rg.txt', 'one\n');
+  const rg = () => out(hook('read-guard.mjs', grok('PreToolUse', 'read_file', { target_file: 'src/grok-rg.txt' }), env)).permissionDecision || 'allow';
+  eq(rg() + ' ' + rg(), 'allow deny', 'grok: read-guard resolves a relative path and refuses the unchanged re-read');
+  const tr = join(TMP, 'grok-transcript.jsonl');
+  writeFileSync(tr, '{"not":"claude"}\n');
+  eq(hook('done-check.mjs', grok('Stop', undefined, undefined, { transcript_path: tr, stop_hook_active: false }), env).stdout, '', 'grok: done-check stays out (other transcript format)');
+}
+
 // ---- hook-health
 {
   const hh = await imp('hook-health.mjs'), cm = await imp('common.mjs');

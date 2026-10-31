@@ -40,7 +40,8 @@ export function unverifiedEdits(entries) {
 if (process.argv[1] && import.meta.url.endsWith(basename(process.argv[1]))) {
   try {
     const input = readStdinJson();
-    if (input?.transcript_path && !input.stop_hook_active && !optedOut(input.cwd)) {
+    // Reads Claude's transcript format only; Grok's transcript differs.
+    if (input?.transcript_path && input.harness !== 'grok' && !input.stop_hook_active && !optedOut(input.cwd)) {
       const files = unverifiedEdits(parseLines(tail(input.transcript_path)));
       if (files.length) {
         const list = files.slice(0, 8).join(', ') + (files.length > 8 ? ` and ${files.length - 8} more` : '');

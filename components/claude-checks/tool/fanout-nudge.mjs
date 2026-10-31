@@ -22,7 +22,7 @@ export const NOTE = `This turn has made ${NUDGE_AT} tool calls on the main threa
 
 // The note for this tool call, or null. Main thread only.
 export function fanoutNote(input) {
-  if (input.agent_id || !input.transcript_path) return null;
+  if (input.agent_id || !input.transcript_path || input.harness === 'grok') return null;
   const s = turnState(parseLines(tail(input.transcript_path, 4 << 20)));
   return !s.delegated && s.calls >= NUDGE_AT && firstTime('fanout\n' + input.session_id + '\n' + s.promptId) ? NOTE : null;
 }

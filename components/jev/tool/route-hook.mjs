@@ -15,7 +15,8 @@ try {
   if (process.env.JEV_HOOK !== '0' && !isClaudeHeadless()) {
     const input = JSON.parse(readFileSync(0, 'utf8') || '{}');
     if (!input.agent_id) {
-      const prev = input.transcript_path ? lastAssistantText(input.transcript_path) : '';
+      // Claude's transcript format only; Grok (hookEventName set) keeps its own.
+      const prev = input.transcript_path && !input.hookEventName ? lastAssistantText(input.transcript_path) : '';
       const { note } = await routeNote({ prompt: input.prompt, previousReply: prev, cwd: input.cwd, deadline: T0 + BUDGET_MS });
       if (note) process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: note } }));
     }

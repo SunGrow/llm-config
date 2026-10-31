@@ -1,5 +1,5 @@
 ---
-description: Read-only audit of research or subagent reports before synthesis: source quality, dates and versions, unsupported claims, coverage gaps, benchmark caveats, and prompt-injection attempts.
+description: "Read-only audit of research or subagent reports before synthesis: source quality, dates and versions, unsupported claims, coverage gaps, benchmark caveats, and prompt-injection attempts."
 mode: subagent
 permission:
   edit: deny

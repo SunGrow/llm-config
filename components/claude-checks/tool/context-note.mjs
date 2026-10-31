@@ -22,7 +22,7 @@ function bumpImages(sessionId) {
 // The note for this tool result, or null.
 export function contextNote(input) {
   const tool = String(input?.tool_name || '');
-  if (!TOOLS.test(tool) || input.agent_id || !input.session_id) return null;
+  if (!TOOLS.test(tool) || input.agent_id || !input.session_id || input.harness === 'grok') return null;
   const r = input.tool_response;
   const text = typeof r === 'string' ? r : JSON.stringify(r ?? '');
   if (isImage(tool, text)) {

@@ -60,11 +60,12 @@ is kept, the installer only manages marked blocks and the JSON keys it added.
 
 | Component | What you get |
 |---|---|
-| `core` | `~/.agents/CORE.md` (always-on rules, ~3.6k chars), `ROUTER.md` and just-in-time packs (security, software, research, collaboration, reasoning) |
+| `core` | `~/.agents/CORE.md` (always-on rules, ~3.6k chars), `ROUTER.md` and just-in-time packs (security, software, research, collaboration, reasoning, visual review) |
 | `skills` | `verify-claims`, `code-research`, `task-start` / `task-continue` / `handoff`, written once to `~/.agents/skills` (and to `~/.claude/skills` for Claude Code) |
 | `claude` | Claude Code: CLAUDE.md block, 5 role subagents with explicit models, commit/PR attribution off |
 | `codex` | Codex CLI: AGENTS.md block, 5 custom agents, optional `lean` profile (never touches `config.toml`) |
 | `opencode` | opencode: AGENTS.md block, 5 subagents |
+| Grok CLI (no component) | Grok reads the `claude` component's files: the `~/.claude/CLAUDE.md` block, `~/.claude/skills`, `~/.claude/agents`, MCP servers in `~/.claude.json`, and in folders it trusts the `claude-checks` hooks (spill, shell and read guards, post-edit check). Check with `grok inspect` |
 | `copilot` | GitHub Copilot CLI / VS Code: `copilot-instructions.md` block, 5 custom agents |
 | `cursor` | Cursor: paste-ready user rules (Cursor keeps them in the app), subagents if no Claude/Codex agents exist |
 | `antigravity`, `gemini` | Google Antigravity rule file; Gemini CLI `GEMINI.md` block |

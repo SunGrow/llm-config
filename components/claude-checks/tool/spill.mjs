@@ -57,18 +57,59 @@ function prune() {
   try { for (const d of readdirSync(SPILL_DIR)) { const p = join(SPILL_DIR, d); if (Date.now() - statSync(p).mtimeMs > KEEP_MS) rmSync(p, { recursive: true, force: true }); } } catch { /* nothing yet */ }
 }
 
+// Model-facing text of a Grok result (tagged objects; a string when Grok already cut it), or null to leave it.
+function grokText(r) {
+  if (typeof r === 'string') return r;
+  if (/"(image|base64|pdf)/i.test(JSON.stringify(r).slice(0, 4000))) return null;  // a replacement drops images
+  switch (r?.type) {
+    case 'Bash': return r.output_for_prompt ?? null;
+    case 'ReadFile': return r.FileContent?.content ?? null;
+    case 'GrepSearch': return Array.isArray(r.stdout) ? Buffer.from(r.stdout).toString('utf8') : r.stdout ?? null;
+    case 'ListDir': return r.Content?.content ?? null;
+    default: return r && typeof r === 'object' && !r.type ? texts(r).join('\n') : null;  // MCP content
+  }
+}
+
+function saveFull(input, text) {
+  const dir = join(SPILL_DIR, createHash('sha256').update(String(input.session_id || 'nosession')).digest('hex').slice(0, 16));
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, `${String(input.tool_use_id || Date.now()).replace(/[^\w-]/g, '')}.txt`);
+  writeFileSync(file, text);
+  prune();
+  return fwd(file);
+}
+
+function readCut(input, c) {
+  const ranged = input.tool_input?.offset != null || input.tool_input?.limit != null;
+  const cap = input.agent_id && !ranged ? READ_AT_SUB : READ_AT;
+  if (typeof c !== 'string' || c.length <= cap) return null;
+  const cut = c.lastIndexOf('\n', cap);
+  return { cap, kept: c.slice(0, cut > 0 ? cut : cap) };
+}
+
+// Grok takes a string as the replacement for any tool and shows it as written.
+function spillGrok(input, tool, r) {
+  const text = grokText(r);
+  if (typeof text !== 'string') return null;
+  if (tool === 'Read') {
+    const k = readCut(input, text);
+    return k && `${k.kept}\n[Read output cut at ${k.cap} characters. Continue with a ranged read of ${input.tool_input?.file_path || 'the file'}, or grep it for the part you need.]`;
+  }
+  if (!SPILL_TOOLS.test(tool) || text.length <= SPILL_AT) return null;
+  return preview(text, saveFull(input, text), text.length);
+}
+
 // Returns the replacement result, or null to leave the result as it is.
 export function spillResult(input) {
   const tool = String(input?.tool_name || ''), r = input?.tool_response;
   if (r == null || EXEMPT.test(tool)) return null;
+  if (input.harness === 'grok') return spillGrok(input, tool, r);
 
   if (tool === 'Read') {
     // A subagent that asked for a range gets the main-thread cap: it already chose how much to read.
-    const ranged = input.tool_input?.offset != null || input.tool_input?.limit != null;
-    const c = r?.file?.content, cap = input.agent_id && !ranged ? READ_AT_SUB : READ_AT;
-    if (typeof c !== 'string' || c.length <= cap) return null;
-    const cut = c.lastIndexOf('\n', cap);
-    const kept = c.slice(0, cut > 0 ? cut : cap);
+    const k = readCut(input, r?.file?.content);
+    if (!k) return null;
+    const { cap, kept } = k;
     const start = Number(r.file.startLine) || 1, shown = kept.split('\n').length, next = start + shown;
     const totalLines = r.file.totalLines ?? r.file.numLines ?? '?';
     const note = `\n[Read output cut at ${cap} characters: lines ${start}-${next - 1} of ${totalLines} shown. Continue with Read offset=${next} and a limit, or Grep the file for the part you need.]`;
@@ -78,10 +119,5 @@ export function spillResult(input) {
   if (!SPILL_TOOLS.test(tool)) return null;
   const all = texts(r), total = all.reduce((n, s) => n + s.length, 0);
   if (total <= SPILL_AT) return null;
-  const dir = join(SPILL_DIR, createHash('sha256').update(String(input.session_id || 'nosession')).digest('hex').slice(0, 16));
-  mkdirSync(dir, { recursive: true });
-  const file = join(dir, `${String(input.tool_use_id || Date.now()).replace(/[^\w-]/g, '')}.txt`);
-  writeFileSync(file, all.join('\n'));
-  prune();
-  return shrink(r, fwd(file), total);
+  return shrink(r, saveFull(input, all.join('\n')), total);
 }

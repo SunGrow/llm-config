@@ -1,6 +1,6 @@
 // Shared helpers for the deterministic Claude Code checks (no model calls).
 import { existsSync, readFileSync, openSync, readSync, fstatSync, closeSync, appendFileSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import { homedir } from 'node:os';
 
 // Hooks fail open, so their errors would vanish. They append here instead; hook-health.mjs reports them.
@@ -22,7 +22,20 @@ export function optedOut(cwd) {
 }
 
 export function readStdinJson() {
-  try { return JSON.parse(readFileSync(0, 'utf8') || '{}'); } catch { return null; }
+  try { return fromGrok(JSON.parse(readFileSync(0, 'utf8') || '{}')); } catch { return null; }
+}
+
+// Grok runs the hooks in ~/.claude/settings.json with its own tool names, input keys and result shapes, plus
+// Claude's snake_case keys. Hooks see Claude's names; `harness: 'grok'` marks the rest (results, transcript).
+const GROK_TOOLS = { run_terminal_command: 'Bash', read_file: 'Read', search_replace: 'Edit', write: 'Write', grep: 'Grep', list_dir: 'Glob', web_fetch: 'WebFetch', web_search: 'WebSearch', spawn_subagent: 'Agent' };
+export function fromGrok(input) {
+  if (typeof input?.hookEventName !== 'string') return input;
+  const raw = String(input.tool_name || ''), ti = { ...(input.tool_input || {}) };
+  const tool = GROK_TOOLS[raw] || (raw.includes('__') && !raw.startsWith('mcp__') ? 'mcp__' + raw : raw);
+  if (ti.file_path == null && ti.target_file != null) ti.file_path = ti.target_file;
+  if (ti.file_path != null && input.cwd) ti.file_path = resolve(input.cwd, String(ti.file_path));
+  if (ti.path == null && ti.target_directory != null) ti.path = ti.target_directory;
+  return { ...input, harness: 'grok', grok_tool_name: raw, tool_name: input.tool_name == null ? undefined : tool, tool_input: ti, agent_id: input.agent_id ?? input.subagentType };
 }
 
 // Last `bytes` of a file as text (whole lines only).

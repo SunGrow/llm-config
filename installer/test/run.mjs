@@ -539,6 +539,29 @@ test('agent-facing text states rules, not findings', () => {
   assert(!hits.length, 'findings-style text in agent-facing files:\n      ' + hits.join('\n      '));
 });
 
+// Strict YAML parsers (Grok, others) drop an agent or skill whose frontmatter has an unquoted value with ': ' or ' #'.
+test('agent and skill frontmatter is strict YAML', () => {
+  const repo = path.join(HERE, '..', '..');
+  const files = [];
+  const walk = (d) => { if (!fs.existsSync(d)) return; for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+    const p = path.join(d, e.name);
+    if (e.isDirectory()) { if (e.name !== 'node_modules') walk(p); continue; }
+    if (/\.(md|mdc)$/.test(e.name)) files.push(p);
+  } };
+  walk(path.join(repo, 'components')); walk(path.join(repo, 'local', 'components'));
+  const hits = [];
+  for (const f of files) {
+    const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(fs.readFileSync(f, 'utf8'));
+    if (!m) continue;
+    m[1].split(/\r?\n/).forEach((l, i) => {
+      const kv = /^([\w-]+):[ \t]+(.+)$/.exec(l);
+      if (!kv || /^['"[{>|]/.test(kv[2])) return;
+      if (/: |\s#|^[@`*&!%]/.test(kv[2])) hits.push(`${path.relative(repo, f)}:${i + 2} ${kv[1]}`);
+    });
+  }
+  assert(!hits.length, 'quote these frontmatter values:\n      ' + hits.join('\n      '));
+});
+
 console.log(`\n${passed} passed, ${failed} failed (${PLAT}, node ${process.versions.node})`);
 if (!failed && !process.env.KEEP_TMP) fs.rmSync(TMP, { recursive: true, force: true });
 process.exitCode = failed ? 1 : 0;
