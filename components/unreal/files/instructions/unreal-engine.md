@@ -1,6 +1,6 @@
 # Unreal Engine work
 
-Adds UE-specific discovery and safety to `software.md`. Engine version, plugins, assertion or logging helpers, and build commands come from the active project, never from memory or another project. Before writing C++, read `unreal-cpp.md` next to this file (Claude Code also loads it as a path-scoped rule for `*.h`, `*.cpp`, `*.inl`); project instructions override it.
+Adds UE-specific discovery and safety to `software.md`. Engine version, plugins, assertion or logging helpers, and build commands come from the active project, never from memory or another project. Before writing C++, read `unreal-cpp.md` next to this file (in Claude Code a path-scoped rule for `*.h`, `*.cpp`, `*.inl` points to it); project instructions override it.
 
 ## Discover
 

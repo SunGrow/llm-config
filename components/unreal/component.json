@@ -6,7 +6,7 @@
   "requires": ["core"],
   "default": false,
   "platforms": ["linux", "darwin", "win32"],
-  "postInstall": "Unreal pack installed in ~/.agents/instructions (unreal-engine.md, unreal-cpp.md); ROUTER.md loads it when a .uproject is in play. With Claude Code, ~/.claude/rules/unreal-cpp.md loads when a C++ file is read or edited and tells the agent to ignore it outside UE projects. Put your team's own C++ standards in the project instructions; they take precedence.",
+  "postInstall": "Unreal pack installed in ~/.agents/instructions (unreal-engine.md, unreal-cpp.md); ROUTER.md loads it when a .uproject is in play. With Claude Code, ~/.claude/rules/unreal-cpp.md loads when a C++ file is read or edited and points to the pack (other tools, such as Grok, load that pointer in every session, so it stays a few lines). Put your team's own C++ standards in the project instructions; they take precedence.",
   "actions": [
     { "type": "copy", "from": "files/instructions/", "to": "{AGENTS_HOME}/instructions/" },
     { "type": "copy", "from": "files/rules/unreal-cpp.md", "to": "{CLAUDE_HOME}/rules/unreal-cpp.md", "when": "claude" }
