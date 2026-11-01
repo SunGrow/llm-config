@@ -54,15 +54,20 @@
     }
   },
   "model_tier": {
-    "description": "Pick the cheapest model that will do a subagent task well (state = JSON with subagent_type, description, brief).",
+    "description": "Classify a subagent task by the kind of work, which selects its model and effort (state = JSON with subagent_type, description, brief).",
     "questions": {
-      "tier": {
+      "kind": {
         "type": "choice",
-        "instructions": "Pick the cheapest model that will do this subagent task well. Judge the work the brief asks for, not how long or detailed the brief is.",
+        "instructions": "Classify the main work this subagent brief asks for. Judge the work itself, not how long or detailed the brief is. If the brief only points to a brief file, judge from its description and role.",
         "criteria": {
-          "haiku": "Mechanical work with a fixed checklist or per-item recipe: list, collect, extract or copy items, find occurrences, run given commands and report their output. No judgment between alternatives.",
-          "sonnet": "A bounded step with a clear goal: implement or edit per a brief or spec section, read-only investigation of a specific question with file:line evidence, web or code research and summary, measurement, bulk reading. Most delegated work.",
-          "opus": "Judgment where a mistake is costly: independent or adversarial verification of claims or reports, critic or reviewer of another agent's work, choosing between designs or root causes, leading or synthesizing other agents, building a large system from a spec."
+          "recipe": "Mechanical work with a fixed checklist or per-item recipe and no need to look at images: list, collect, extract, copy or unpack items, find occurrences, run given commands and report their output.",
+          "research": "Find out or measure something and report it, in text or code: web or docs research, read-only code investigation of a specific question with file:line evidence, measuring by script, bulk reading, summaries, knowledge work.",
+          "code": "Write or edit ordinary code or docs from a brief or spec section: a bounded feature, a fix whose cause is known, a build or integration step.",
+          "hard_code": "Code where the approach is the hard part: a large system from a spec, a change across many modules, a migration, or a bug whose root cause is unknown after others tried.",
+          "build_3d": "Produce or change 3D through code and tools: Blender or CAD scripts, meshes, sculpting by script, rigs, shaders, Unreal skin, LOD or asset steps, including rendering and looking at its own result.",
+          "visual": "Look at images and judge what they show: find, catalog or compare art references by what is visible, describe shape, anatomy, space or defects, a first-pass or blind visual opinion.",
+          "read_image_text": "Read text or numbers out of images: labels, captions, tables, chart values, dialogs, scans.",
+          "verify": "Judgment where a mistake is costly: independent or adversarial check of claims or reports, critic or reviewer of another agent's work, final accept or reject, choosing between designs or root causes, leading or synthesizing other agents."
         }
       }
     }

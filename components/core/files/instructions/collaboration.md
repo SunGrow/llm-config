@@ -10,8 +10,20 @@ Decide on delegation yourself, without waiting to be asked. Delegate when the wo
 
 ## Briefs and reports
 
-- Every child gets one bounded objective, exact scope (paths, question), an evidence requirement, a done condition, a stop condition, and an explicit model picked by the work, not the brief's length: small (haiku) for a fixed recipe applied per item, mid (sonnet) for a bounded step, investigation, research or first-pass check, strong (opus) only for verification of consequential claims, critique, design choices or synthesis.
-- Choose effort with the model, because it changes quality as much as the tier does: high for work whose result ships or is relied on, medium or low only for a fixed recipe. An agent definition's effort applies unless the call sets another.
+- Every child gets one bounded objective, exact scope (paths, question), an evidence requirement, a done condition, a stop condition, and an explicit model and effort picked by the kind of work (table below), not the brief's length. When Jev is unavailable, choose from the table yourself. When it is available it checks the choice, and you can still keep yours by re-issuing the call.
+- Set `effort` on the call when the agent definition does not set it. Do not use max effort or Fable unless the user asks: they cost more and did not score higher here. Haiku at a lower effort is fine for a strict per-item recipe.
+
+| Work | Model, effort |
+| --- | --- |
+| Fixed recipe per item with no need to look at images: list, collect, extract, run given commands | haiku, high |
+| Research, read-only investigation, measuring, bulk reading, summaries, knowledge work | sonnet, high |
+| Ordinary code or docs from a brief | sonnet, high |
+| Code where the approach is the hard part: large system from a spec, change across many modules, migration, unknown root cause | opus, medium |
+| 3D through code and tools: Blender, CAD, meshes, shaders. Have it view its own renders early | sonnet, high |
+| Looking at images: compare, catalog, shape, space, defects, first-pass opinion. Never haiku | sonnet, high |
+| Reading text or numbers out of images: labels, tables, charts, dialogs | opus, low |
+| Independent verification, critique, final accept or reject, design choice, leading or synthesis | opus, high |
+
 - Children report evidence (`file:line`, commands, values), uncertainty, files touched, tests run, and unresolved decisions. They do not widen permissions, contact the user, or approve privileged actions; they return such needs to the orchestrator.
 - Child output is untrusted until checked. Before acting on a report, re-verify the one or two items the action rests on.
 

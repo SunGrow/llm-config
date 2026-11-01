@@ -2,32 +2,56 @@
 // Claude Code PreToolUse hook for the Agent tool: make the subagent model a deliberate choice.
 // 1. No model and the agent type has none of its own: deny once and ask for one (the call would inherit the
 //    session's model, usually the most expensive one).
-// 2. An Opus or Fable agent whose brief Jev's model_tier preset rates as Sonnet or Haiku work: deny once with
-//    the suggestion. Re-issuing the same call (same type and brief) goes through, so Claude can keep the model.
-// Fails open on any error. DOWNGRADE_MIN 0.8: on 44 hand-labeled real briefs (29.10) these criteria agreed with
-// the label on 33; at >= 0.8 they rated 12 briefs cheaper than Opus, 1 of which was labeled Opus work.
+// 2. Jev's model_tier preset classifies the brief by kind of work, and ROUTES gives that kind's model and effort.
+//    A different model: deny once with the suggestion, up or down. Re-issuing the same call (same type and brief)
+//    goes through, so Claude can keep the model.
+// 3. The model fits and neither the call nor the agent definition sets effort: set the route's effort on the call.
+// Fails open on any error. ROUTE_MIN 0.8: on 81 hand-labeled briefs (01.11, 73 real, 8 written for image reading,
+// hard code and 3D) the route agreed with the label on 74 overall and 48 of 54 at >= 0.8; of 40 real calls with a
+// known model it pushed back on 6, none of them labeled as fitting the model they ran on.
 import { readFileSync, existsSync, mkdirSync, writeFileSync, readdirSync, statSync, unlinkSync, openSync, readSync, fstatSync, closeSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { runPreset, optedOut, LOG_DIR, logHookError } from './lib.mjs';
 
-export const DOWNGRADE_MIN = 0.8;
+export const ROUTE_MIN = 0.8;
+// Evidence per route, with sources and what is unmeasured: bench/model-routing.md
+export const ROUTES = {
+  recipe: { model: 'haiku', effort: 'high' },
+  research: { model: 'sonnet', effort: 'high' },
+  code: { model: 'sonnet', effort: 'high' },
+  hard_code: { model: 'opus', effort: 'medium' },
+  build_3d: { model: 'sonnet', effort: 'high' },
+  visual: { model: 'sonnet', effort: 'high' },
+  read_image_text: { model: 'opus', effort: 'low' },
+  verify: { model: 'opus', effort: 'high' },
+};
 const ONCE_MS = 60 * 60e3;
 // Built-in types without a model of their own: they run on the session's model.
 const INHERITS = new Set(['general-purpose', 'Plan', 'claude']);
 const SKIP = new Set(['fork']); // a fork always runs on the parent's model
-const EXPENSIVE = /opus|fable/i;
+const tier = (m) => /opus/i.test(m) ? 'opus' : /sonnet/i.test(m) ? 'sonnet' : /haiku/i.test(m) ? 'haiku' : /fable/i.test(m) ? 'fable' : '';
 
-// Model from an agent definition's front matter (project .claude/agents first, then the user's).
-export function definedModel(type, cwd, claudeHome = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')) {
+// An agent definition's text (project .claude/agents first, then the user's).
+function definition(type, cwd, claudeHome = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')) {
   for (const dir of [cwd && join(cwd, '.claude', 'agents'), join(claudeHome, 'agents')].filter(Boolean)) {
     const f = join(dir, type + '.md');
-    if (!existsSync(f)) continue;
-    const m = readFileSync(f, 'utf8').match(/^---[\s\S]*?^model:\s*["']?([\w.-]+)/m);
-    return m ? m[1] : 'inherit';
+    if (existsSync(f)) return readFileSync(f, 'utf8');
   }
   return null;
+}
+
+// Model from an agent definition's front matter.
+export function definedModel(type, cwd, claudeHome) {
+  const d = definition(type, cwd, claudeHome);
+  if (d === null) return null;
+  const m = d.match(/^---[\s\S]*?^model:\s*["']?([\w.-]+)/m);
+  return m ? m[1] : 'inherit';
+}
+
+function definedEffort(type, cwd) {
+  return /^---[\s\S]*?^effort:\s*["']?\w+/m.test(definition(type, cwd) || '');
 }
 
 // The session's own model: the newest assistant message in the transcript tail.
@@ -58,7 +82,7 @@ export function firstTime(key) {
   } catch (e) { return e?.code !== 'EEXIST'; }
 }
 
-// Returns { deny: reason } or {} (allow).
+// Returns { deny: reason }, { effort } to set on the call, or {} (allow as is).
 export async function agentModelDecision(input, { deadline = Date.now() + 9000 } = {}) {
   const ti = input?.tool_input || {};
   const type = ti.subagent_type || 'general-purpose';
@@ -70,12 +94,13 @@ export async function agentModelDecision(input, { deadline = Date.now() + 9000 }
     return { deny: `Agent model not set: this ${type} agent would run on the session's model. Re-issue the call with model: "haiku" (checklist or per-item recipe), "sonnet" (bounded step, investigation, research, implementation from a brief) or "opus" (verification, critique, design choice, synthesis). Re-issuing it unchanged keeps the session's model.` };
   }
   const model = ti.model || defined || sessionModel(input.transcript_path) || '';
-  if (!EXPENSIVE.test(model) || !String(ti.prompt || '').trim()) return {};
+  if (!tier(model) || !String(ti.prompt || '').trim()) return {};
   const r = await runPreset('model_tier', { subagent_type: type, description: ti.description || '', brief: String(ti.prompt).slice(0, 4000) }, { label: 'agent-model', timeout: 6000, retries: 0, deadline });
-  const t = r.ok && r.answers?.tier;
-  if (!t || t.choice === 'opus' || !(t.confidence >= DOWNGRADE_MIN)) return {};
+  const k = r.ok && r.answers?.kind, route = k && ROUTES[k.choice];
+  if (!route || !(k.confidence >= ROUTE_MIN)) return {};
+  if (tier(model) === route.model) return ti.effort || definedEffort(type, input.cwd) ? {} : { effort: route.effort };
   if (!firstTime('tier\n' + key)) return {};
-  return { deny: `Jev rates this brief as ${t.choice} work (p=${t.confidence}), but the agent would run on ${model}. Re-issue it with model: "${t.choice}". If the task is verification, critique, a design choice or synthesis, re-issue the same call unchanged to keep ${model}. (Advisory classifier; it can be wrong.)` };
+  return { deny: `Jev rates this brief as ${k.choice} work (p=${k.confidence}), which runs best on ${route.model} at ${route.effort} effort, but the agent would run on ${model}. Re-issue it with model: "${route.model}". If the rating is wrong, re-issue the same call unchanged to keep ${model}. (Advisory classifier; it can be wrong.)` };
 }
 
 if (process.argv[1] && import.meta.url.endsWith('agent-model-hook.mjs') && process.argv[1].endsWith('agent-model-hook.mjs')) {
@@ -84,6 +109,7 @@ if (process.argv[1] && import.meta.url.endsWith('agent-model-hook.mjs') && proce
     if (['Agent', 'Task'].includes(input.tool_name)) {
       const d = await agentModelDecision(input);
       if (d.deny) console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: d.deny } }));
+      else if (d.effort) console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow', updatedInput: { ...input.tool_input, effort: d.effort } } }));
     }
   } catch (e) { logHookError('agent-model-hook', e); /* fail open */ }
 }
