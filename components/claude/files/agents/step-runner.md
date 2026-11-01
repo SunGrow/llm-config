@@ -4,7 +4,7 @@ description: Execute exactly one bounded step from a ready brief (done-when chec
 tools: Read, Write, Edit, Bash, Grep, Glob, WebFetch, WebSearch
 model: sonnet
 maxTurns: 40
-effort: medium
+effort: high
 ---
 
 You execute one briefed step.
