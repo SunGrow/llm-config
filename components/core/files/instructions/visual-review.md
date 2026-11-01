@@ -18,7 +18,7 @@ Skip the ones that are not installed. `vision.py` and `surface_views.py` are in 
 - Render and look early, before building further, and again after each substantial change.
 - For surface quality (steps, ledges, flat patches, creases), look at a normal or curvature render of the region as well as the plain render. Plain and clay renders miss small defects. In Blender use `surface_views.py`, or the project's own renderer if it has these modes.
 - Use curvature as a picture to look at. A threshold on curvature does not separate defects from anatomy.
-- To find images in a large folder, run `vision.py index` once with `--model siglip2`, then `search --text`, and look at the hits. Searching by an example image finds near-copies, not the same view. Treat the view label from `vision.py pose` as a hint and confirm by looking.
+- To find images in a large folder, run `vision.py index` once with `--model siglip2`, then `search --text`, and look at the hits. If the folder mixes references with generated renders, limit results with `--under`. Describe the whole frame in the query ("full body character standing, seen from the side"), and try a second wording before deciding the images aren't there. Search hides duplicates, contact sheets and blank images; add `--all` when you need them, such as rows of figures for motion. Searching by an example image finds near-copies, not the same view. Treat the view label from `vision.py pose` as a hint and confirm by looking.
 - Use `vision.py compare` as a coarse silhouette check, not as acceptance.
 
 ## Motion

@@ -31,6 +31,26 @@ Limits: one body, one run per reader, synthetic defects, seven of them mirrored 
 | Example image, same view (front, side, back, side), hits of 32 | 5 | 3 |
 | Text, hits matching of 8 | no text | side 8, back 6, hand 6, three-quarter 2 |
 
+Full 56,853-image index, top 8 per query, one blind reader (Sonnet) who saw only the query and the sheet. 43% of the folder is generated renders; without a folder filter 2 of 8 hand hits were references, with `--under` 8 of 8. The 8 of 8 side result above did not carry over to the full reference set. Before the fixes, by my own count, the first query below had about 3 fits and 5 blank hits or tiny sprites.
+
+| Query, within the reference folder | Fit | Partial | Miss | Grid or blank |
+| --- | --- | --- | --- | --- |
+| "side profile of a standing person" | 5 | 0 | 2 | 1 |
+| "full body character standing, seen from the side" | 4 | 3 | 1 | 0 |
+| "full body side view of a woman" | 4 | 1 | 3 | 0 |
+| "back view of a standing person" | 5 | 3 | 0 | 0 |
+| "front view of a standing person, full body" | 5 | 0 | 3 | 0 |
+| "a hand, close-up" | 2 | 4 | 2 | 0 |
+| "a close-up of a human hand with fingers" | 3 | 3 | 2 | 0 |
+
+- Cause of the blank hits: transparent images were flattened on white, so a figure covering 2 to 17% of the canvas embedded as mostly white. 5,036 images have transparency. Cropping them to their visible pixels before embedding left other images' scores unchanged within 0.0001.
+- Blank filter: 99th percentile brightness step on a 128 px thumbnail, below 15. Empty gradients measured 2 to 11, the flattest real image 20, faint pencil sketches 26 and up. An earlier mean-step score could not separate a pale haze (1.56) from a real sketch (1.79).
+- Contact-sheet filter: embedding similarity to a fixed text above 0.055. Six known grids measured 0.058 to 0.14, 16 single-subject hits 0.032 at most. It covers 592 of 32,305 references. A repeat detector on pixels was rejected: it flagged a sketch and a photo of two hands before it caught most grids.
+- Duplicate filter: embedding similarity above 0.97. Identical-looking pairs measured 0.98 and 1.00, the same figure in another outfit 0.88.
+- Across the seven queries the filters hid 5 grids and 7 blanks, and all 12 were right when I opened them. Among the 24 highest sheet scores in a 1500-image sample, one single-subject image was above the threshold. A row of walking figures counts as a sheet though it can be a useful motion reference; `--all` turns the filters off.
+- Thresholds come from these few images. Still wrong: "a hand, close-up" ranks a door, which drops to rank 155 with "a close-up of a human hand with fingers"; hand queries stay weak, and a strip of four small heads passed as a single image.
+- One search took over 4 minutes right after `setup`. Repeating that sequence took 20 and 18 s, 16 s with the Hugging Face hub offline. Not reproduced, cause not established.
+
 Example-image search mostly returned crops or copies of the query and similar drawing styles, so it finds near-duplicates, not views. Speed: DINOv2 128 images/s, 335 MB VRAM; SigLIP 2 36 images/s, 2.8 GB VRAM, 4.4 GB RAM. Cold start 8 to 14 s.
 
 ## View labels from pose

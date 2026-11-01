@@ -74,7 +74,21 @@ def require_cuda():
     return torch.device("cuda")
 
 
-def load_rgb(path, max_side=None):
+def crop_to_alpha(im):
+    """Square crop of an RGBA image around its visible pixels, or the image itself if they nearly fill it.
+    A small figure on a large transparent canvas otherwise embeds as mostly white."""
+    box = im.getchannel("A").point(lambda v: 255 if v > 12 else 0).getbbox()
+    if not box:
+        return im
+    w, h = box[2] - box[0], box[3] - box[1]
+    if w * h >= 0.9 * im.width * im.height:
+        return im
+    side = round(max(w, h) * 1.1)
+    x, y = (box[0] + box[2] - side) // 2, (box[1] + box[3] - side) // 2
+    return im.crop((x, y, x + side, y + side))
+
+
+def load_rgb(path, max_side=None, crop_alpha=False):
     """Open an image as RGB (alpha composited on white). Optionally cap the longest side."""
     from PIL import Image
     Image.MAX_IMAGE_PIXELS = 400_000_000
@@ -83,6 +97,8 @@ def load_rgb(path, max_side=None):
         im.draft("RGB", (max_side, max_side))
     if im.mode in ("RGBA", "LA") or (im.mode == "P" and "transparency" in im.info):
         im = im.convert("RGBA")
+        if crop_alpha:
+            im = crop_to_alpha(im)
         bg = Image.new("RGBA", im.size, (255, 255, 255, 255))
         im = Image.alpha_composite(bg, im)
     im = im.convert("RGB")
@@ -119,7 +135,7 @@ class Embedder:
         import numpy as np
         from PIL import Image
         n = self.size
-        im = load_rgb(path, max_side=n * 4)
+        im = load_rgb(path, max_side=n * 4, crop_alpha=True)
         if self.letterbox:
             s = n / max(im.size)
             im = im.resize((max(1, round(im.width * s)), max(1, round(im.height * s))), Image.BICUBIC)
@@ -265,12 +281,37 @@ def cmd_index(a):
     out(res)
 
 
+DUPLICATE_SIM = 0.97  # identical-looking pairs measured 0.98 and up, same figure in another outfit 0.88
+BLANK_STROKE = 15  # empty gradients measured 2 to 11, the flattest real image 20, faint pencil sketches 26 and up
+SHEET_TEXT = "a contact sheet, a grid of many small thumbnails"
+SHEET_SIM = 0.055  # known grids measured 0.058 and up, single-subject hits 0.032 at most
+
+
+def is_blank(path):
+    """True if an image has no strokes or edges: 99th percentile brightness step on a 128 px thumbnail."""
+    import numpy as np
+    try:
+        im = load_rgb(path, max_side=512, crop_alpha=True).convert("L")
+    except Exception:
+        return False
+    im.thumbnail((128, 128))
+    g = np.asarray(im, dtype=np.float32)
+    steps = np.concatenate([np.abs(np.diff(g, axis=0)).ravel(), np.abs(np.diff(g, axis=1)).ravel()])
+    return float(np.percentile(steps, 99)) < BLANK_STROKE
+
+
 def cmd_search(a):
     import numpy as np
     idx = Path(a.idx)
     meta = json.loads(Path(str(idx) + ".meta.json").read_text(encoding="utf-8"))
     mat = np.load(str(idx) + ".npy").astype(np.float32)
     paths = json.loads(Path(str(idx) + ".paths.json").read_text(encoding="utf-8"))
+    keep = np.arange(len(paths))
+    if a.under:
+        base = os.path.normcase(os.path.normpath(os.path.join(meta["root"], a.under))) + os.sep
+        keep = np.array([i for i, p in enumerate(paths) if os.path.normcase(os.path.normpath(p)).startswith(base)], dtype=int)
+        if not len(keep):
+            fail(f"no indexed image under {a.under} (relative paths start at {meta['root']})")
     emb = Embedder(meta["model"])
     if a.text is not None:
         if meta["model"] != "siglip2":
@@ -279,9 +320,23 @@ def cmd_search(a):
     else:
         q = emb.embed_arrays([emb.prep(a.image)])[0]
     sc = mat @ q
-    k = min(a.top, len(paths))
-    order = np.argsort(-sc)[:k]
+    sheet = mat @ emb.embed_text(SHEET_TEXT) if meta["model"] == "siglip2" and not a.all else None
+    order, dup, grid, blank = [], 0, 0, 0
+    for j in keep[np.argsort(-sc[keep])]:
+        if len(order) == a.top:
+            break
+        if a.all:
+            order.append(int(j))
+        elif order and float((mat[order] @ mat[j]).max()) > DUPLICATE_SIM:
+            dup += 1
+        elif sheet is not None and sheet[j] > SHEET_SIM:
+            grid += 1
+        elif is_blank(paths[j]):
+            blank += 1
+        else:
+            order.append(int(j))
     res = {"model": meta["model"], "query": a.text if a.text is not None else str(a.image),
+           "hidden": {"duplicates": dup, "contact_sheets": grid, "blank": blank},
            "results": [{"rank": i + 1, "path": paths[j], "score": round(float(sc[j]), 4)} for i, j in enumerate(order)]}
     if a.sheet:
         contact_sheet([paths[j] for j in order], a.sheet)
@@ -302,7 +357,7 @@ def contact_sheet(paths, out_png, cell=320, cols=4):
     for i, p in enumerate(paths):
         x, y = (i % cols) * cell, (i // cols) * cell
         try:
-            im = load_rgb(p, max_side=cell * 2)
+            im = load_rgb(p, max_side=cell * 2, crop_alpha=True)
             im.thumbnail((cell - 8, cell - 8))
             sheet.paste(im, (x + (cell - im.width) // 2, y + (cell - im.height) // 2))
         except Exception:
@@ -926,6 +981,8 @@ def main():
     g.add_argument("--text")
     p.add_argument("--top", type=int, default=8)
     p.add_argument("--sheet")
+    p.add_argument("--under", help="only images in this folder; a relative path starts at the indexed folder")
+    p.add_argument("--all", action="store_true", help="keep duplicates, contact sheets and blank images")
     p.set_defaults(fn=cmd_search)
 
     p = sub.add_parser("normals", help="MoGe-2 normal map")
