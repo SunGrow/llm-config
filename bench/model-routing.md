@@ -66,5 +66,6 @@ ARC-AGI-2, Opus 5.5 (independent, ARC Prize verified): low 70.1, medium 87.5, hi
 - Terminal-Bench 4.0 is reported differently by source: Sonnet is ahead in Anthropic's table, and behind in the official board and in Vals' mirror (65.15 against 64.14). The Vals snapshot text also gives 61.62 for Opus and 53.03 for Sonnet. Most of these do not state effort for Sonnet.
 - Anthropic's tables mix effort levels, and some Sonnet figures differ between its own pages (OSWorld 80.1 and 83.9 on different subsets, GDPval 1844 and 1840).
 - Opus and Fable runs have safeguards that fall back to other models, which Anthropic says likely lowers their scores.
-- BenchCAD and SpatialBench numbers come through an aggregator that cites the system cards. The cards were not read directly.
+- BenchCAD and SpatialBench numbers come through an aggregator that cites the system cards. The cards were not read directly. A secondary report of the BenchCAD paper gives lower Vision2Code numbers (0.384 rising to 0.650 with tools), so the size of the tool gain is less settled than the direction.
+- Local blind test (`perception-tools.md`) agrees with the visual route on a small set: Sonnet found 8 to 11 of 12 surface defects across views and Opus 8 to 12, with no false alarms; Haiku found 4 to 7 with false alarms.
 - No source measures judging character anatomy, the cost of these routes in subscription limits, or Sonnet's coding at high effort.

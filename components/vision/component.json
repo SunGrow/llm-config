@@ -1,0 +1,14 @@
+{
+  "id": "vision",
+  "title": "Local vision toolkit",
+  "description": "On-demand command-line tools for agents: text search over image folders, silhouette compare, pose keypoints, point tracking in video, plus a Blender script for normal and curvature renders. Models run locally; needs about 12 GB of disk once set up and an NVIDIA GPU for useful speed.",
+  "group": "extras",
+  "requires": ["core"],
+  "default": false,
+  "platforms": ["linux", "darwin", "win32"],
+  "requiresBinaries": ["python"],
+  "postInstall": "Vision: run `python ~/.agents/tools/vision/vision.py setup` once to create its virtual environment; models download on first use. The Blender script ~/.agents/tools/vision/surface_views.py needs no setup.",
+  "actions": [
+    { "type": "copy", "from": "tool/", "to": "{AGENTS_HOME}/tools/vision/" }
+  ]
+}

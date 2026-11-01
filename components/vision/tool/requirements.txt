@@ -1,0 +1,42 @@
+# Vision toolkit dependencies (tried on Python 3.14, Windows, NVIDIA GPU). Installed by "vision.py setup",
+# which also installs rtmlib and tapnet separately (see NO_DEPS there).
+#
+# rtmlib is installed with --no-deps because it depends on the CPU-only "onnxruntime",
+# which would clash with onnxruntime-gpu below (opencv, numpy and tqdm are listed here instead).
+# tapnet is installed with --no-deps because its default dependencies pull in JAX; only the
+# PyTorch BootsTAPIR code (tapnet.torch) is used, which needs torch, numpy and dm-tree (below).
+# Set HF_HOME (and optionally VISION_CACHE) to choose where model weights are cached.
+
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch==2.11.0+cu128
+torchvision==0.26.0+cu128
+
+numpy
+pillow
+psutil
+transformers
+safetensors
+huggingface_hub
+sentencepiece
+protobuf
+
+# BiRefNet remote code (official ZhengPeng7/BiRefNet repo, pinned revision in vision.py)
+timm
+einops
+kornia
+
+# MoGe-2 (pinned commit)
+scipy
+utils3d @ git+https://github.com/EasternJournalist/utils3d.git
+moge @ git+https://github.com/microsoft/MoGe.git@74fbce054ebed49800de42d0ad0e83495065719a
+
+# track / dynamics
+matplotlib
+dm-tree
+einshape
+
+# pose
+# onnxruntime-gpu needs the CUDA 13 runtime DLLs (cublas64_13 etc.) for GPU; without them pose runs on CPU (default).
+onnxruntime-gpu==1.31.1
+opencv-python
+tqdm

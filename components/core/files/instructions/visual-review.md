@@ -10,3 +10,20 @@ Applies when a result is judged by how it looks: 3D models and renders, images, 
 - Name defects in the user's terms and recheck the ones the user already named before reporting a new version.
 - Classify references by what is visible in the frame, not by labels, titles, characters or canon.
 - Downscale whole sheets to the project's size limit; for detail, open a crop rather than a larger sheet.
+
+## Tools
+
+Skip the ones that are not installed. `vision.py` and `surface_views.py` are in `~/.agents/tools/vision/`.
+
+- Render and look early, before building further, and again after each substantial change.
+- For surface quality (steps, ledges, flat patches, creases), look at a normal or curvature render of the region as well as the plain render. Plain and clay renders miss small defects. In Blender use `surface_views.py`, or the project's own renderer if it has these modes.
+- Use curvature as a picture to look at. A threshold on curvature does not separate defects from anatomy.
+- To find images in a large folder, run `vision.py index` once with `--model siglip2`, then `search --text`, and look at the hits. Searching by an example image finds near-copies, not the same view. Treat the view label from `vision.py pose` as a hint and confirm by looking.
+- Use `vision.py compare` as a coarse silhouette check, not as acceptance.
+
+## Motion
+
+- In a 3D scene, read motion from per-frame bone and vertex data, not from pixels.
+- On video, run `vision.py track` with a moving point and a reference point on a rigid part, then `dynamics` or a spectrum. Trust the frequency after opening the strip to check the tracks stay on target. Check amplitude, lag and damping by a second method before relying on them. A sustained cycle does not give natural frequency or damping.
+- To show motion to a model, draw the tracks on sampled frames instead of giving a few bare frames.
+- Fix one definition per project for a motion metric such as foot sliding, and do not compare it with numbers from other definitions.
