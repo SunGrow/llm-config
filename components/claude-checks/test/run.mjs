@@ -186,6 +186,9 @@ const file = (name, text) => { const p = join(TMP, 'src', name); mkdirSync(dirna
   ok(path && readFileSync(path, 'utf8').includes('line 1999 '), 'spill: full output saved to the named file', path);
   ok(!o.additionalContext, 'spill: no size note once spilled');
   eq(post({ tool_name: 'Bash', tool_response: { stdout: 'x'.repeat(sp.SPILL_AT - 10), stderr: '' } }).updatedToolOutput, undefined, 'spill: under the threshold untouched');
+  const mid5k = 'x'.repeat(sp.SPILL_AT_SUB + 500);
+  eq(post({ tool_name: 'Bash', tool_response: { stdout: mid5k, stderr: '' } }).updatedToolOutput, undefined, 'spill: main thread keeps a result between the two caps');
+  ok(post({ tool_name: 'Bash', agent_id: 'sub1', tool_response: { stdout: mid5k, stderr: '' } }).updatedToolOutput?.stdout?.includes('characters not shown'), 'spill: subagent cut at its lower cap');
   o = post({ tool_name: 'mcp__blueprint-extractor__extract_blueprint', tool_response: [{ type: 'text', text: big }, { type: 'image', source: { data: 'abc' } }] });
   ok(Array.isArray(o.updatedToolOutput) && o.updatedToolOutput[0].text.length < 4000 && o.updatedToolOutput[1].source.data === 'abc', 'spill: MCP text shrinks, images untouched', JSON.stringify(o).slice(0, 200));
   o = post({ tool_name: 'Glob', tool_response: { filenames: Array.from({ length: 900 }, (_, i) => `D:/proj/src/some/deep/folder/file${i}.ts`), numFiles: 900, truncated: false } });

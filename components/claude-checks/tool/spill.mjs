@@ -1,14 +1,17 @@
 // Large tool results go to a file instead of the context. Used by post-tool.mjs (PostToolUse) through
 // hookSpecificOutput.updatedToolOutput, which must keep the tool's result shape: only text fields shrink.
-// Tool results: over SPILL_AT characters, the full text is saved and Claude sees the path, the size, the head
-// and the tail. Read: over READ_AT characters (READ_AT_SUB in a subagent), Claude sees a contiguous first part
+// Tool results: over SPILL_AT characters (SPILL_AT_SUB in a subagent), the full text is saved and Claude sees the
+// path, the size, the head and the tail. Read: over READ_AT characters (READ_AT_SUB in a subagent), Claude sees a contiguous first part
 // and the line to continue from; the file itself is the full copy, so nothing is saved.
 import { mkdirSync, writeFileSync, readdirSync, statSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
 
-export const SPILL_AT = Number(process.env.CLAUDE_CHECKS_SPILL_AT) || 4000;
+// A main-thread cap of 4000 cut 411 results in four days, 80% of them under 8000 characters, and 107 were read again
+// from the saved file. At 8000, 81 would be cut and 22 of those read again. Subagent results were not measured.
+export const SPILL_AT = Number(process.env.CLAUDE_CHECKS_SPILL_AT) || 8000;
+export const SPILL_AT_SUB = Number(process.env.CLAUDE_CHECKS_SPILL_AT_SUBAGENT) || 4000;
 export const READ_AT = Number(process.env.CLAUDE_CHECKS_READ_SPILL_AT) || 40000;
 // Subagents read to answer a bounded question, so their Reads get a lower cap than the main thread's.
 export const READ_AT_SUB = Number(process.env.CLAUDE_CHECKS_READ_SPILL_AT_SUBAGENT) || 15000;
@@ -21,6 +24,7 @@ const EXEMPT = new RegExp(process.env.CLAUDE_CHECKS_SPILL_EXEMPT || String.raw`^
 const SPILL_TOOLS = /^(Bash|PowerShell|Grep|Glob|WebFetch|WebSearch|mcp__.+)$/;
 
 const fwd = (p) => p.replace(/\\/g, '/');
+const spillCap = (input) => input.agent_id ? SPILL_AT_SUB : SPILL_AT;
 
 // Text leaves of a result, skipping images and base64 payloads.
 function texts(v, out = []) {
@@ -95,7 +99,7 @@ function spillGrok(input, tool, r) {
     const k = readCut(input, text);
     return k && `${k.kept}\n[Read output cut at ${k.cap} characters. Continue with a ranged read of ${input.tool_input?.file_path || 'the file'}, or grep it for the part you need.]`;
   }
-  if (!SPILL_TOOLS.test(tool) || text.length <= SPILL_AT) return null;
+  if (!SPILL_TOOLS.test(tool) || text.length <= spillCap(input)) return null;
   return preview(text, saveFull(input, text), text.length);
 }
 
@@ -118,6 +122,6 @@ export function spillResult(input) {
 
   if (!SPILL_TOOLS.test(tool)) return null;
   const all = texts(r), total = all.reduce((n, s) => n + s.length, 0);
-  if (total <= SPILL_AT) return null;
+  if (total <= spillCap(input)) return null;
   return shrink(r, saveFull(input, all.join('\n')), total);
 }
