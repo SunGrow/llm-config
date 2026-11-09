@@ -140,6 +140,11 @@ const file = (name, text) => { const p = join(TMP, 'src', name); mkdirSync(dirna
   eq(hook('shell-guard.mjs', { tool_name: 'Bash', cwd: TMP, tool_input: { command: cmd } }, env).stdout, '', 'shell-guard hook: same command passes on re-issue');
   eq(hook('shell-guard.mjs', { tool_name: 'Bash', cwd: TMP, tool_input: { command: cmd + ' x', run_in_background: true } }, env).stdout, '', 'shell-guard hook: background passes');
   eq(hook('shell-guard.mjs', 'bad', env).status, 0, 'shell-guard hook: bad stdin fails open');
+  const tr = join(TMP, 'sg-transcript.jsonl');
+  writeFileSync(tr, JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'toolu_mon1', name: 'Monitor', input: { command: cmd } }] } }) + '\n');
+  eq(sg.startedBy({ transcript_path: tr, tool_use_id: 'toolu_mon1' }), 'Monitor', 'shell-guard: finds the tool that started a command');
+  eq(sg.startedBy({ transcript_path: tr, tool_use_id: 'toolu_other' }, 1), null, 'shell-guard: unknown id starts nothing');
+  eq(hook('shell-guard.mjs', { tool_name: 'Bash', cwd: TMP, transcript_path: tr, tool_use_id: 'toolu_mon1', tool_input: { command: cmd + ' m' } }, env).stdout, '', 'shell-guard hook: a Monitor poll loop passes');
 }
 
 // ---- fanout-nudge
