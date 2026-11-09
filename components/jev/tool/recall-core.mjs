@@ -9,6 +9,9 @@ export const MAX_CHARS = 2400;     // per chunk; longer turns are split into "(c
 export const SEND_CHARS = 2000;    // per chunk sent to the rerank model
 export const MAX_SEND = 1000;      // rerank-2.5 request limit; above it BM25 preselects (weak for Russian: bench hit@5 0.30)
 export const RECALL_MODEL = process.env.JEV_RECALL_MODEL || 'voyageai/rerank-2.5';
+// Second-best ranker in the bench, from another provider: Voyage's per-minute token limit is shared by all OpenRouter
+// users and answers 429 when it is full. JEV_RECALL_FALLBACK_MODEL="" turns the fallback off.
+export const RECALL_FALLBACK = process.env.JEV_RECALL_FALLBACK_MODEL ?? 'cohere/rerank-4-pro';
 const COMPACT = 'This session is being continued from a previous conversation';
 
 // A turn = the user's typed message plus the assistant's text; tool calls become "[tool: Name]", tool output is dropped.
@@ -68,7 +71,8 @@ export function bm25Index(texts, k1 = 1.2, b = 0.75) {
 }
 
 // OpenRouter rerank (POST /api/v1/rerank). Returns { order, cost } with order = indices into docs, best first.
-export async function rerank(model, query, docs, { topN = 10, timeout = 30000 } = {}) {
+// retry429: a per-minute limit rarely clears within seconds, so callers with a fallback model skip those retries.
+export async function rerank(model, query, docs, { topN = 10, timeout = 30000, retry429 = true } = {}) {
   if (process.env.JEV_OFFLINE === '1') throw new Error('JEV_OFFLINE=1');
   const key = apiKey();
   if (!key) throw new Error('no OpenRouter key');
@@ -77,24 +81,31 @@ export async function rerank(model, query, docs, { topN = 10, timeout = 30000 } 
     const r = await fetch('https://openrouter.ai/api/v1/rerank', { method: 'POST', headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' }, body, signal: AbortSignal.timeout(timeout) });
     const txt = await r.text();
     if (r.ok) { const j = JSON.parse(txt.trim()); return { order: j.results.map(x => x.index), cost: j.usage?.cost ?? null }; }
-    if (attempt >= 2 || (r.status !== 429 && r.status < 500)) throw new Error(`rerank ${r.status}: ${txt.slice(0, 200)}`);
+    if (attempt >= 2 || (r.status === 429 && !retry429) || (r.status !== 429 && r.status < 500)) throw Object.assign(new Error(`rerank ${r.status}: ${txt.slice(0, 200)}`), { status: r.status });
     await new Promise(res => setTimeout(res, 1500 * (attempt + 1)));
   }
 }
 
 // Rank chunks for a question. local: never send text off the machine (BM25 only).
 // Returns { hits: chunk[], via, cost, note? }.
-export async function recall(question, chunks, { k = 5, local = false, model = RECALL_MODEL } = {}) {
+export async function recall(question, chunks, { k = 5, local = false, model = RECALL_MODEL, fallback = RECALL_FALLBACK } = {}) {
   const texts = chunks.map(c => c.text);
   const bm = bm25Index(texts);
   if (!local && chunks.length) {
-    try {
-      const cand = chunks.length > MAX_SEND ? bm(question).slice(0, MAX_SEND) : texts.map((_, i) => i);
-      const r = await rerank(model, question, cand.map(i => texts[i]), { topN: k });
-      return { hits: r.order.map(j => chunks[cand[j]]), via: model, cost: r.cost };
-    } catch (e) {
-      return { hits: bm(question).slice(0, k).map(i => chunks[i]), via: 'bm25', cost: 0, note: 'rerank failed, used BM25: ' + String(e.message).slice(0, 160) };
+    const cand = chunks.length > MAX_SEND ? bm(question).slice(0, MAX_SEND) : texts.map((_, i) => i);
+    const errs = [];
+    // The fallback covers a busy, down or withdrawn model (429, 5xx, network, 400 "does not exist");
+    // offline mode and key or credit errors would fail it the same way, so they go straight to BM25.
+    for (const m of fallback && fallback !== model ? [model, fallback] : [model]) {
+      try {
+        const r = await rerank(m, question, cand.map(i => texts[i]), { topN: k, retry429: m === fallback || !fallback });
+        return { hits: r.order.map(j => chunks[cand[j]]), via: m, cost: r.cost, ...(errs.length && { note: m + ' used, ' + errs[0] }) };
+      } catch (e) {
+        errs.push(m + ' failed: ' + String(e.message).slice(0, 120));
+        if ([401, 402, 403].includes(e.status) || /JEV_OFFLINE|no OpenRouter key/.test(e.message)) break;
+      }
     }
+    return { hits: bm(question).slice(0, k).map(i => chunks[i]), via: 'bm25', cost: 0, note: 'rerank failed, used BM25: ' + errs.join('; ').slice(0, 300) };
   }
   return { hits: bm(question).slice(0, k).map(i => chunks[i]), via: 'bm25', cost: 0 };
 }

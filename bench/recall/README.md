@@ -31,6 +31,17 @@ node claude-run.mjs native|tool [--model sonnet]   # end-to-end answers, judged 
 - Jev, the yes/no classifier, is no better than the pool it is given.
 - So the shipped tool sends every turn (up to 1000) to `voyageai/rerank-2.5` and falls back to BM25 offline.
 
+Rerun 2026-11-09 with the rerankers released since:
+
+| Method | hit@1 | hit@5 | MRR | Russian hit@5 | $/query | p50 latency |
+|---|---|---|---|---|---|---|
+| cohere/rerank-5-fast | 0.80 | 0.90 | 0.84 | 0.80 | 0.004 | 2.3 s |
+| cohere/rerank-5-pro | 0.80 | 0.93 | 0.86 | 0.80 | 0.009 | 2.3 s |
+| mongodb/rerank-2.5 (the same model under its new id; 25 of 30, the rest hit 429) | 0.92 | 1.00 | 0.95 | 1.00 | 0.010 | 5.0 s |
+
+- Neither Cohere 5 model beats `voyageai/rerank-2.5`, so it stays the default; the old id still answers.
+- Voyage models on OpenRouter share one per-minute token limit (6M tokens) across all users, and both rerank-2.5 and rerank-3 answered 429 for most of an afternoon; two real recall calls on 2026-11-08 fell back to BM25 that way. The tool now falls back to `cohere/rerank-4-pro` (next best, another provider) on 429, 5xx or a withdrawn model before BM25.
+
 ## End to end (Sonnet, `claude -p`, the same 30 questions, transcript cut before this benchmark began)
 
 | Condition | Correct (Jev judge) | Correct (hand-checked disagreements) | Mean turns | Mean $ | Median time |

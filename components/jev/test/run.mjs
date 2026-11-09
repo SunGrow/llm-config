@@ -426,6 +426,31 @@ group('recall');
   ok(r.via === 'bm25' && r.hits.length === 2 && r.hits[0] === chunks[0] && !r.note, 'recall: local mode is BM25 only');
   r = await rc.recall('installer key', chunks, { k: 1 });
   ok(r.via === 'bm25' && /JEV_OFFLINE/.test(r.note || '') && r.hits[0] === chunks[0], 'recall: rerank failure falls back to BM25 with a note');
+  {
+    // Stubbed OpenRouter: status per model; records which models were called.
+    const saved = { fetch: globalThis.fetch, off: process.env.JEV_OFFLINE, key: process.env.OPENROUTER_API_KEY };
+    delete process.env.JEV_OFFLINE; process.env.OPENROUTER_API_KEY = 'stub-key';
+    let calls = [];
+    const stub = (status) => { globalThis.fetch = async (_u, o) => { const m = JSON.parse(o.body).model; calls.push(m); const s = status[m] ?? 200;
+      return { ok: s === 200, status: s, text: async () => s === 200 ? JSON.stringify({ results: [{ index: 1 }], usage: { cost: 0.01 } }) : `{"error":"${s}"}` }; }; };
+    try {
+      stub({ A: 429 }); calls = [];
+      r = await rc.recall('q', chunks, { k: 1, model: 'A', fallback: 'B' });
+      ok(r.via === 'B' && r.hits[0] === chunks[1] && /A failed: rerank 429/.test(r.note) && calls.join() === 'A,B', 'recall: 429 on the main model goes to the fallback without retrying', JSON.stringify({ r, calls }));
+      stub({ A: 400 }); calls = [];
+      r = await rc.recall('q', chunks, { k: 1, model: 'A', fallback: 'B' });
+      ok(r.via === 'B' && calls.join() === 'A,B', 'recall: withdrawn main model (400) goes to the fallback');
+      stub({ A: 401 }); calls = [];
+      r = await rc.recall('q', chunks, { k: 1, model: 'A', fallback: 'B' });
+      ok(r.via === 'bm25' && calls.join() === 'A' && /A failed: rerank 401/.test(r.note), 'recall: key error skips the fallback and uses BM25');
+      stub({ A: 429 }); calls = [];
+      r = await rc.recall('q', chunks, { k: 1, model: 'A', fallback: '' });
+      ok(r.via === 'bm25' && calls.join() === 'A,A,A', 'recall: no fallback keeps the 429 retries');
+    } finally {
+      globalThis.fetch = saved.fetch; process.env.JEV_OFFLINE = saved.off;
+      if (saved.key === undefined) delete process.env.OPENROUTER_API_KEY; else process.env.OPENROUTER_API_KEY = saved.key;
+    }
+  }
   const cli = spawnSync(process.execPath, [join(TOOL, 'recall.mjs'), 'why was the key not saved', '--file', file, '--k', '1', '--local'], { encoding: 'utf8', cwd: TMP, timeout: 20000 });
   ok(cli.status === 0 && cli.stdout.includes('via bm25') && cli.stdout.includes(`lines 1-2`), 'recall CLI: prints ranked turn with lines', cli.stdout + cli.stderr);
   eq(spawnSync(process.execPath, [join(TOOL, 'recall.mjs'), 'q'], { encoding: 'utf8' }).status, 2, 'recall CLI: usage error without --file');

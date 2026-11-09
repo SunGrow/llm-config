@@ -7,9 +7,9 @@
 # PyTorch BootsTAPIR code (tapnet.torch) is used, which needs torch, numpy and dm-tree (below).
 # Set HF_HOME (and optionally VISION_CACHE) to choose where model weights are cached.
 
---extra-index-url https://download.pytorch.org/whl/cu128
-torch==2.11.0+cu128
-torchvision==0.26.0+cu128
+--extra-index-url https://download.pytorch.org/whl/cu134
+torch==2.15.0+cu134
+torchvision==0.29.2+cu134
 
 numpy
 pillow
@@ -36,7 +36,7 @@ dm-tree
 einshape
 
 # pose
-# onnxruntime-gpu needs the CUDA 13 runtime DLLs (cublas64_13 etc.) for GPU; without them pose runs on CPU (default).
+# onnxruntime-gpu needs the CUDA 13 runtime DLLs (cublas64_13 etc.) for GPU; torch cu134 ships them. Pose defaults to CPU.
 onnxruntime-gpu==1.31.1
 opencv-python
 tqdm

@@ -9,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 export const HERE = dirname(fileURLToPath(import.meta.url));
 // decisions.jsonl and the gate's once-per-tool-call markers; JEV_LOG_DIR moves them (tests use a temp dir).
 export const LOG_DIR = process.env.JEV_LOG_DIR || join(HERE, 'logs');
-// 1.14 is TypeSafe's preview build (docs.typesafe.ai/models); 1.13 is the stable one. Thresholds were tuned on 1.14.
+// 1.14 is TypeSafe's newest stable release, the target of jev-latest (docs.typesafe.ai/models, checked 2026-11-09);
+// 1.13 is the older one, kept as the fallback. Pinned rather than jev-latest because thresholds were tuned on 1.14.
 export const DEFAULT_MODEL = process.env.JEV_MODEL || 'typesafe/jev-1.14';
 const FALLBACK_MODEL = process.env.JEV_FALLBACK_MODEL || 'typesafe/jev-1.13';
 const MAX_STATE_CHARS = 60000;

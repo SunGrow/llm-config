@@ -55,7 +55,7 @@ Example-image search mostly returned crops or copies of the query and similar dr
 
 ## View labels from pose
 
-`estimate_view` on 400 random images, labelled classes judged blind on up to 16 samples each: back 8 of 12 exact, front 6 of 16, side 6 of 16 (13 of 16 side or three-quarter), three-quarter 3 of 16; 212 of 400 returned unknown. Too weak to sort references. Keypoints were right on the two character sheets opened. 1.3 s per image on CPU; the GPU build needs CUDA 13 DLLs that torch does not ship.
+`estimate_view` on 400 random images, labelled classes judged blind on up to 16 samples each: back 8 of 12 exact, front 6 of 16, side 6 of 16 (13 of 16 side or three-quarter), three-quarter 3 of 16; 212 of 400 returned unknown. Too weak to sort references. Keypoints were right on the two character sheets opened. 1.3 s per image on CPU; the GPU build needs CUDA 13 DLLs that torch did not ship then (cu128). Since the move to torch 2.15 cu134 it does, and a single image took 6.7 s on CUDA against 4.8 s on CPU, so CPU stays the default.
 
 ## Point tracking and dynamics
 

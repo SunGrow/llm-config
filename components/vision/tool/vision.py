@@ -584,7 +584,8 @@ def cmd_pose(a):
     os.environ.setdefault("TORCH_HOME", str(_CACHE / "rtmlib"))  # rtmlib caches weights under $TORCH_HOME/hub
     from rtmlib import Body
     import onnxruntime as ort
-    # onnxruntime-gpu 1.31 needs the CUDA 13 runtime, which torch cu128 does not ship: default to CPU.
+    # onnxruntime-gpu 1.31 can run on the CUDA 13 DLLs that torch cu134 loads, but CPU stays the default: one image took
+    # 4.8 s on CPU and 6.7 s on CUDA (GPU session start dominates). VISION_POSE_DEVICE=cuda for batches.
     dev = os.environ.get("VISION_POSE_DEVICE", "cpu")
     body = Body(mode="balanced", backend="onnxruntime", device=dev)
     used = None
@@ -940,7 +941,7 @@ def cmd_dynamics(a):
 
 # ----------------------------------------------------------------------------- setup
 
-NO_DEPS = ["rtmlib==0.0.16", "tapnet @ git+https://github.com/google-deepmind/tapnet.git@730cda1c730877cfedbe01bf87fb1cadb78a565d"]
+NO_DEPS = ["rtmlib==0.0.16", "tapnet @ git+https://github.com/google-deepmind/tapnet.git@ceedd60bb9f6c9f7c74796e4445aff6c6ddf7c9b"]
 
 
 def cmd_setup(a):
