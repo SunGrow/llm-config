@@ -4,7 +4,10 @@
 //    session's model, usually the most expensive one).
 // 2. Jev's model_tier preset classifies the brief by kind of work, and ROUTES gives that kind's model and effort.
 //    A different model: deny once with the suggestion, up or down. Re-issuing the same call (same type and brief)
-//    goes through, so Claude can keep the model.
+//    goes through, so Claude can keep the model. Before that, if the user's own messages in the session name the
+//    chosen model, the model_request preset asks whether they asked for it for this kind of work; if so (or if Jev
+//    cannot tell) the call goes through untouched. In one jam session the user asked for "modeling work with fable
+//    max and the level design with fable extra", and the hook pushed 15 such briefs toward sonnet.
 // 3. The model fits and neither the call nor the agent definition sets effort: set the route's effort on the call.
 // Fails open on any error. ROUTE_MIN 0.8: on 81 hand-labeled briefs (01.11, 73 real, 8 written for image reading,
 // hard code and 3D) the route agreed with the label on 74 overall and 48 of 54 at >= 0.8; of 40 real calls with a
@@ -13,9 +16,13 @@ import { readFileSync, existsSync, mkdirSync, writeFileSync, readdirSync, statSy
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
-import { runPreset, optedOut, LOG_DIR, logHookError } from './lib.mjs';
+import { runPreset, optedOut, LOG_DIR, logHookError, userWords } from './lib.mjs';
 
 export const ROUTE_MIN = 0.8;
+// model_request on the 16 distinct Fable briefs of that jam session (11-14, live, transcript cut before each call):
+// the 13 modeling and level briefs scored 0.49 to 0.98, the 3 writing and design briefs 0.07 to 0.20. 0.4 splits
+// them, but it was picked on those same 16 briefs.
+export const REQUEST_MIN = 0.4;
 // Evidence per route, with sources and what is unmeasured: bench/model-routing.md
 export const ROUTES = {
   recipe: { model: 'haiku', effort: 'high' },
@@ -71,6 +78,24 @@ export function sessionModel(path) {
   return null;
 }
 
+// The user's messages in the session that name the model tier and do not rule it out ("no fable", "without opus"),
+// oldest first, the last 8, each cut to 500 characters. Only lines whose raw text names the tier are parsed.
+const NEGATION = /\b(no|not|never|without|avoid|instead of|don'?t|do not|stop using)\b/i;
+export function userMentions(path, tierName) {
+  if (!path || !tierName) return [];
+  let text; try { text = readFileSync(path, 'utf8'); } catch { return []; }
+  const has = new RegExp(`\\b${tierName}\\b`, 'i'), all = new RegExp(`\\b${tierName}\\b`, 'gi'), out = [];
+  for (const line of text.split('\n')) {
+    if (!has.test(line) || !(line.includes('"type":"user"') || line.includes('"queued_command"'))) continue;
+    let e; try { e = JSON.parse(line); } catch { continue; }
+    const t = userWords(e);
+    if (!t) continue;
+    const named = [...t.matchAll(all)].some(m => !NEGATION.test(t.slice(Math.max(0, m.index - 40), m.index).split(/[.!?\n]/).pop()));
+    if (named) out.push(t.slice(0, 500));
+  }
+  return out.slice(-8);
+}
+
 // True the first time this exact call is seen within the window.
 export function firstTime(key) {
   try {
@@ -100,7 +125,15 @@ export async function agentModelDecision(input, { deadline = Date.now() + 9000 }
   if (!route || !(k.confidence >= ROUTE_MIN)) return {};
   if (tier(model) === route.model) return ti.effort || definedEffort(type, input.cwd) ? {} : { effort: route.effort };
   if (!firstTime('tier\n' + key)) return {};
-  return { deny: `Jev rates this brief as ${k.choice} work (p=${k.confidence}), which runs best on ${route.model} at ${route.effort} effort, but the agent would run on ${model}. Re-issue it with model: "${route.model}". If the rating is wrong, re-issue the same call unchanged to keep ${model}. (Advisory classifier; it can be wrong.)` };
+  const suggest = `Jev rates this brief as ${k.choice} work (p=${k.confidence}), which runs best on ${route.model} at ${route.effort} effort, but the agent would run on ${model}.`;
+  const asked = userMentions(input.transcript_path, tier(model));
+  if (asked.length) {
+    const q = await runPreset('model_request', { model: tier(model), description: ti.description || '', brief: String(ti.prompt).slice(0, 2000), user_messages: asked }, { label: 'agent-model-request', timeout: 4000, retries: 0, deadline });
+    const c = q.ok && q.answers?.covered;
+    if (!c || !(c.p < REQUEST_MIN)) return {}; // asked for this work, or Jev could not tell: the user's choice stands
+    return { deny: `${suggest} The user named ${tier(model)} in this session, but for other work as Jev reads it (p=${c.p} that it covers this brief). Re-issue it with model: "${route.model}", or re-issue the same call unchanged if the user's request does cover this work. (Advisory classifier; it can be wrong.)` };
+  }
+  return { deny: `${suggest} Re-issue it with model: "${route.model}". If the rating is wrong, re-issue the same call unchanged to keep ${model}. (Advisory classifier; it can be wrong.)` };
 }
 
 if (process.argv[1] && import.meta.url.endsWith('agent-model-hook.mjs') && process.argv[1].endsWith('agent-model-hook.mjs')) {

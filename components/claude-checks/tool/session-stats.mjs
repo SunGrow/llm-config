@@ -4,7 +4,7 @@
 import { readdirSync, statSync, readFileSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { homedir } from 'node:os';
-import { parseLines, isTypedPrompt } from './common.mjs';
+import { parseLines, isTypedPrompt, queuedPrompt } from './common.mjs';
 
 export function sessionStats(entries) {
   const s = { prompts: 0, interrupts: 0, compactions: 0, toolCalls: 0, toolErrors: 0, gateAsks: 0, repeatedCommands: 0,
@@ -22,6 +22,7 @@ export function sessionStats(entries) {
       else if (isTypedPrompt(e)) s.prompts++;
       if (Array.isArray(c)) for (const x of c) if (x.type === 'tool_result' && x.is_error) s.toolErrors++;
     }
+    if (queuedPrompt(e)) s.prompts++; // typed while Claude was working
     if (e.type === 'assistant') {
       const id = e.message?.id;
       if (id && !seenMsg.has(id) && e.message.usage) {

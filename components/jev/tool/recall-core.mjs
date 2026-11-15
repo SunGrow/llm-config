@@ -3,7 +3,7 @@
 // Benchmark behind the defaults: bench/recall in the llm-config repo.
 import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
-import { apiKey, redact } from './lib.mjs';
+import { apiKey, redact, userWords } from './lib.mjs';
 
 export const MAX_CHARS = 2400;     // per chunk; longer turns are split into "(cont.)" parts
 export const SEND_CHARS = 2000;    // per chunk sent to the rerank model
@@ -14,8 +14,9 @@ export const RECALL_MODEL = process.env.JEV_RECALL_MODEL || 'voyageai/rerank-2.5
 export const RECALL_FALLBACK = process.env.JEV_RECALL_FALLBACK_MODEL ?? 'cohere/rerank-4-pro';
 const COMPACT = 'This session is being continued from a previous conversation';
 
-// A turn = the user's typed message plus the assistant's text; tool calls become "[tool: Name]", tool output is dropped.
-// Harness messages (strings starting with "<") and compaction summaries do not start turns.
+// A turn = a message from the user (typed, with images, or typed while Claude was working: lib.mjs userWords) plus the
+// assistant's text after it; tool calls become "[tool: Name]", tool output is dropped. Harness messages and
+// compaction summaries do not start turns.
 export function chunkTranscript(path) {
   const lines = readFileSync(path, 'utf8').split('\n');
   const chunks = [], compactions = [];
@@ -34,12 +35,11 @@ export function chunkTranscript(path) {
     if (!s) return;
     let e; try { e = JSON.parse(s); } catch { return; }
     const ln = i + 1;
-    if (e.type === 'user' && typeof e.message?.content === 'string') {
-      const t = e.message.content;
-      if (t.startsWith(COMPACT)) { compactions.push(ln); flush(); return; }
-      if (t.startsWith('<')) return;
+    if (e.type === 'user' && typeof e.message?.content === 'string' && e.message.content.startsWith(COMPACT)) { compactions.push(ln); flush(); return; }
+    const words = userWords(e);
+    if (words) {
       flush();
-      cur = { start: ln, end: ln, parts: ['USER: ' + t.trim()] };
+      cur = { start: ln, end: ln, parts: ['USER: ' + words] };
       return;
     }
     if (!cur || e.type !== 'assistant') return;

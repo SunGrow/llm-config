@@ -4,3 +4,4 @@ node_modules/
 .DS_Store
 test-home*/
 __pycache__/
+components/jev/tool/logs/

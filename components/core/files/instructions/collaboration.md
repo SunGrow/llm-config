@@ -11,7 +11,8 @@ Decide on delegation yourself, without waiting to be asked. Delegate when the wo
 ## Briefs and reports
 
 - Every child gets one bounded objective, exact scope (paths, question), an evidence requirement, a done condition, a stop condition, and an explicit model and effort picked by the kind of work (table below), not the brief's length. When Jev is unavailable, choose from the table yourself. When it is available it checks the choice, and you can still keep yours by re-issuing the call.
-- Set `effort` on the call when the agent definition does not set it. Do not use max effort or Fable unless the user asks: they cost more and did not score higher here. Haiku at a lower effort is fine for a strict per-item recipe.
+- Set `effort` on the call when the agent definition does not set it. Do not use max effort or Fable unless the user asks: they cost more and did not score higher here. When the user asked for a model or effort for a kind of work, use it for that work. Haiku at a lower effort is fine for a strict per-item recipe.
+- One bounded step per agent. When an agent's context grows past about 150k tokens, have it end with a handoff (done with evidence, left, files, open questions) and start a fresh agent for the rest instead of sending it more work.
 
 | Work | Model, effort |
 | --- | --- |

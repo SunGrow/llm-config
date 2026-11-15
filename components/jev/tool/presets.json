@@ -72,6 +72,15 @@
       }
     }
   },
+  "model_request": {
+    "description": "Did the user ask for this model for this kind of subagent work? (state = JSON with model, description, brief, user_messages: the user's messages in this session that name the model). Asked by the agent model hook before it pushes back on a model choice.",
+    "questions": {
+      "covered": {
+        "type": "noul",
+        "instructions": "The user's messages name the model in `model`. Does one of them ask for that model for the kind of work this subagent brief does? An instruction for a kind of work covers briefs that mainly do that work: \"do the modeling with fable\" covers building meshes, kits or levels in 3D, not writing quest text or a design document. Answer no if the user only mentioned the model, ruled it out, or asked for it for different work."
+      }
+    }
+  },
   "diff_risk": {
     "description": "Gate a diff or command before commit/run (state = diff or command text).",
     "questions": {

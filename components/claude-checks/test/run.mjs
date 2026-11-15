@@ -83,8 +83,11 @@ const file = (name, text) => { const p = join(TMP, 'src', name); mkdirSync(dirna
     { type: 'attachment', attachment: { type: 'hook_additional_context', hookEvent: 'PreToolUse', toolUseID: 't1', content: ['Jev gate: high-impact command'] }, uuid: 'u2' },
     { type: 'user', message: { content: [{ type: 'tool_result', content: 'grep output quoting "permissionDecision":"ask"' }] } },
     { type: 'user', timestamp: '2026-10-29T12:00:00Z', message: { content: 'next' } },
+    { type: 'user', message: { content: [{ type: 'text', text: 'see screenshot' }, { type: 'image', source: {} }] } },
+    { type: 'attachment', attachment: { type: 'queued_command', prompt: 'typed while busy', origin: { kind: 'human' } } },
+    { type: 'attachment', attachment: { type: 'queued_command', prompt: 'from an agent', origin: { kind: 'peer' } } },
   ]);
-  eq([s.prompts, s.compactions, s.interrupts, s.toolCalls, s.toolErrors, s.repeatedCommands, s.gateAsks], [2, 1, 1, 3, 1, 1, 1], 'session-stats: counts');
+  eq([s.prompts, s.compactions, s.interrupts, s.toolCalls, s.toolErrors, s.repeatedCommands, s.gateAsks], [4, 1, 1, 3, 1, 1, 1], 'session-stats: counts (prompts with images and typed while busy included)');
   eq([s.tokens.output, s.tokens.cacheRead], [12, 100], 'session-stats: usage counted once per message id');
   eq(s.activeMs, 15 * 60e3, 'session-stats: idle gaps capped at 15 min');
   const r = spawnSync(process.execPath, [join(TOOL, 'session-stats.mjs'), '--days', '1', '--json'], { encoding: 'utf8', env: { ...process.env, CLAUDE_CONFIG_DIR: join(TMP, 'noclaude') }, timeout: 20000 });
@@ -163,6 +166,49 @@ const file = (name, text) => { const p = join(TMP, 'src', name); mkdirSync(dirna
   ok(JSON.parse(r1.stdout || '{}').hookSpecificOutput?.additionalContext === fn.NOTE, 'fanout hook: nudges at the threshold', r1.stdout + r1.stderr);
   eq(hook('post-tool.mjs', inp, env).stdout, '', 'fanout hook: once per turn');
   eq(hook('post-tool.mjs', { ...inp, session_id: 'x' + Date.now(), agent_id: 'a1' }, env).stdout, '', 'fanout hook: silent inside a subagent');
+}
+
+// ---- agent-size (note inside post-tool, SendMessage check as its own hook)
+{
+  const as = await imp('agent-size.mjs');
+  const env = { CLAUDE_CHECKS_STATE: join(TMP, 'once-as'), CLAUDE_CHECKS_AGENT_STATE: join(TMP, 'agent-size') };
+  Object.assign(process.env, env);
+  const sid = 'sess' + Date.now(), id = 'a0123456789abcdef', main = join(TMP, 'proj', sid + '.jsonl');
+  const sub = join(TMP, 'proj', sid, 'subagents', `agent-${id}.jsonl`);
+  mkdirSync(dirname(sub), { recursive: true });
+  const asst = (ctx) => JSON.stringify({ type: 'assistant', message: { id: 'm' + ctx, usage: { input_tokens: 2, cache_creation_input_tokens: 1000, cache_read_input_tokens: ctx - 1002 }, content: [] } });
+  const setCtx = (ctx) => writeFileSync(sub, [asst(5000), JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', content: 'x'.repeat(100) }] } }), asst(ctx)].join('\n') + '\n');
+  writeFileSync(main, [
+    JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'toolu_1', name: 'Agent', input: { name: 'kit-modeler', prompt: 'p' } }] } }),
+    JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'toolu_1', content: [{ type: 'text', text: `Async agent launched successfully. agentId: ${id} (internal ID)` }] }] } }),
+  ].join('\n') + '\n');
+  setCtx(120000);
+  eq(as.agentTranscript(main, sid, id), sub, 'agent-size: subagent transcript beside the session transcript');
+  eq(as.agentTranscript(sub, sid, id), sub, 'agent-size: transcript_path that is already the subagent file');
+  eq(as.agentTranscript(main, sid, 'a00000000000000ff'), null, 'agent-size: missing subagent transcript');
+  eq(as.lastContext(sub), 120000, 'agent-size: context of the newest call');
+  const inp = { tool_name: 'Bash', session_id: sid, cwd: TMP, transcript_path: main, agent_id: id, tool_response: { stdout: 'ok' } };
+  eq(hook('post-tool.mjs', inp, env).stdout, '', 'agent-size note: silent below the limit');
+  setCtx(160000);
+  const n1 = JSON.parse(hook('post-tool.mjs', inp, env).stdout || '{}').hookSpecificOutput?.additionalContext || '';
+  ok(n1.includes("this subagent's context is 160k") && n1.includes('handoff'), 'agent-size note: told past the limit', n1);
+  eq(hook('post-tool.mjs', inp, env).stdout, '', 'agent-size note: once per 50k band');
+  setCtx(205000);
+  ok((JSON.parse(hook('post-tool.mjs', inp, env).stdout || '{}').hookSpecificOutput?.additionalContext || '').includes('205k'), 'agent-size note: told again in the next band');
+  ok(JSON.parse(readFileSync(join(TMP, 'agent-size', id + '.json'), 'utf8')).ctx === 205000, 'agent-size: state file records the measured context');
+  eq(hook('post-tool.mjs', { ...inp, agent_id: undefined }, env).stdout.includes('subagent'), false, 'agent-size note: main thread silent');
+  eq(as.resolveAgent('kit-modeler', main), id, 'agent-size: SendMessage name resolved to its agent id');
+  eq(as.resolveAgent('nobody', main), null, 'agent-size: unknown name');
+  const send = { tool_name: 'SendMessage', session_id: sid, cwd: TMP, transcript_path: main, tool_input: { to: 'kit-modeler', message: 'more work' } };
+  const d1 = hook('agent-size.mjs', send, env);
+  let j = null; try { j = JSON.parse(d1.stdout); } catch { /* */ }
+  ok(j?.hookSpecificOutput?.permissionDecision === 'deny' && /205k tokens.*fresh agent/.test(j.hookSpecificOutput.permissionDecisionReason), 'agent-size SendMessage: large agent denied once', d1.stdout + d1.stderr);
+  eq(hook('agent-size.mjs', send, env).stdout, '', 'agent-size SendMessage: re-issued goes through');
+  setCtx(90000);
+  eq(as.sendDecision({ ...send, session_id: sid + 'b' }), {}, 'agent-size SendMessage: small agent allowed');
+  eq(as.sendDecision({ ...send, tool_input: { to: 'main', message: 'x' } }), {}, 'agent-size SendMessage: to main allowed');
+  eq(hook('agent-size.mjs', 'bad', env).stdout, '', 'agent-size hook: bad stdin fails open');
+  for (const k of Object.keys(env)) delete process.env[k];
 }
 
 // ---- context notes (inside post-tool)

@@ -57,6 +57,19 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "SendMessage",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "{NODE}",
+            "args": [
+              "{AGENTS_HOME}/tools/checks/agent-size.mjs"
+            ],
+            "timeout": 10
+          }
+        ]
       }
     ],
     "Stop": [

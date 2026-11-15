@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 // Claude Code PostToolUse hook (all tools), one process for every per-call check:
-// spill.mjs (large results to a file), context-note.mjs (many screenshots), fanout-nudge.mjs (delegate reminder).
-// Each part fails open on its own.
+// spill.mjs (large results to a file), context-note.mjs (many screenshots), fanout-nudge.mjs (delegate reminder),
+// agent-size.mjs (a subagent past its context limit). Each part fails open on its own.
 import { optedOut, readStdinJson, logHookError } from './common.mjs';
 import { spillResult } from './spill.mjs';
 import { contextNote } from './context-note.mjs';
 import { fanoutNote } from './fanout-nudge.mjs';
+import { agentSizeNote } from './agent-size.mjs';
 
 if (process.argv[1]?.endsWith('post-tool.mjs')) {
   try {
@@ -17,6 +18,7 @@ if (process.argv[1]?.endsWith('post-tool.mjs')) {
       // The size note looks at what Claude now sees, so a spilled result does not also draw it.
       try { const c = contextNote(replaced ? { ...input, tool_response: replaced } : input); if (c) notes.push(c); } catch (e) { logHookError('context-note', e); }
       try { const f = fanoutNote(input); if (f) notes.push(f); } catch (e) { logHookError('fanout-nudge', e); }
+      try { const a = agentSizeNote(input); if (a) notes.push(a); } catch (e) { logHookError('agent-size', e); }
       if (notes.length) out.additionalContext = notes.join('\n\n');
       if (replaced || notes.length) console.log(JSON.stringify({ hookSpecificOutput: out }));
     }

@@ -50,15 +50,18 @@ export function tail(path, bytes = 8 << 20) {
   } finally { closeSync(fd); }
 }
 
-// A typed user prompt (not a tool result, harness message or compaction summary).
+// A typed user prompt, images allowed (not a tool result, harness message or compaction summary). A message typed
+// while Claude was working is a queuedPrompt instead: it arrives inside the turn, so it does not start one.
 export function isTypedPrompt(e) {
   if (e?.type !== 'user' || e.isMeta) return false;
   const c = e.message?.content;
-  const text = typeof c === 'string' ? c : Array.isArray(c) && c.every(x => x.type === 'text') ? c.map(x => x.text).join('\n') : null;
+  const text = typeof c === 'string' ? c : Array.isArray(c) && !c.some(x => x?.type === 'tool_result') ? c.filter(x => x?.type === 'text').map(x => x.text).join('\n') : null;
   if (text == null) return false;
   const t = text.trim();
   return !!t && !t.startsWith('<') && !t.startsWith('This session is being continued from a previous conversation');
 }
+
+export const queuedPrompt = (e) => e?.type === 'attachment' && e.attachment?.type === 'queued_command' && e.attachment.origin?.kind === 'human';
 
 export function parseLines(text) {
   const out = [];

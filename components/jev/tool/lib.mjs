@@ -27,6 +27,25 @@ export function logHookError(hook, e) {
   } catch { /* nowhere to report */ }
 }
 
+// The user's own words in one Claude Code transcript entry, or null. Two shapes carry them: a typed prompt (a string,
+// or text blocks with images beside them) and a message typed while Claude was working, which arrives as an
+// attachment of type queued_command with origin.kind "human" (20 of 51 user messages in one 17-hour session, 11-14).
+// Tool results, harness text ("<..."), compaction summaries and messages from agents or peers are not.
+const CONTINUED = 'This session is being continued from a previous conversation';
+export function userWords(e) {
+  let t = null;
+  if (e?.type === 'attachment') {
+    const a = e.attachment;
+    if (a?.type === 'queued_command' && a.origin?.kind === 'human' && typeof a.prompt === 'string') t = a.prompt;
+  } else if (e?.type === 'user' && !e.isMeta) {
+    const c = e.message?.content;
+    if (typeof c === 'string') t = c;
+    else if (Array.isArray(c) && !c.some(x => x?.type === 'tool_result')) t = c.filter(x => x?.type === 'text').map(x => x.text).join('\n');
+  }
+  t = (t || '').trim();
+  return t && !t.startsWith('<') && !t.startsWith(CONTINUED) ? t : null;
+}
+
 // Opt-out shared by every adapter: env JEV_HOOK=0, or a marker file .agents/jev-off or .claude/jev-off in the project.
 export function optedOut(cwd) {
   if (process.env.JEV_HOOK === '0') return true;

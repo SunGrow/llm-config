@@ -419,6 +419,17 @@ group('recall');
   eq(chunks.map(c => c.id.split(':')[1]), ['1', '6', '8', '8.1'], 'recall: turns, harness skipped, long turn split');
   ok(chunks[0].text.includes('[tool: Bash]') && !chunks.some(c => /harness text|must not appear/.test(c.text)), 'recall: tool calls marked, tool output and harness text dropped');
   ok(chunks[3].text.startsWith('(cont.) ') && chunks[0].end === 2, 'recall: continuation prefix and line range');
+  {
+    const lib = await import(pathToFileURL(join(TOOL, 'lib.mjs')).href);
+    const q = (prompt, kind = 'human') => ({ type: 'attachment', attachment: { type: 'queued_command', prompt, origin: { kind } } });
+    eq(lib.userWords({ type: 'user', message: { content: [{ type: 'text', text: 'look at this' }, { type: 'image', source: {} }] } }), 'look at this', 'userWords: prompt with an image');
+    eq(lib.userWords(q('typed while busy')), 'typed while busy', 'userWords: message typed while Claude worked');
+    eq([lib.userWords(q('x', 'peer')), lib.userWords(q('x', 'task-notification')), lib.userWords({ type: 'user', message: { content: [{ type: 'tool_result', content: 'x' }] } }), lib.userWords({ type: 'user', isMeta: true, message: { content: 'meta' } })], [null, null, null, null], 'userWords: agent messages, notifications, tool results and meta are not the user');
+    const f2 = join(TMP, 'session2.jsonl');
+    writeFileSync(f2, [u('Build the hut.'), a({ type: 'text', text: 'Building the hut from the stone kit now.' }), JSON.stringify(q('Use wooden planks like the reference hut, not stone.')), a({ type: 'text', text: 'Switching the hut walls to wooden planks.' }), JSON.stringify({ type: 'user', message: { content: [{ type: 'text', text: 'Here is the reference screenshot of the hut.' }, { type: 'image', source: {} }] } })].join('\n'));
+    const c2 = rc.chunkTranscript(f2).chunks;
+    ok(c2.length === 3 && c2[1].text.startsWith('USER: Use wooden planks') && c2[1].text.includes('Switching the hut walls') && c2[2].text.includes('reference screenshot'), 'recall: messages typed while busy and prompts with images start turns', JSON.stringify(c2.map(c => c.text.slice(0, 50))));
+  }
   const bm = rc.bm25Index(chunks.map(c => c.text));
   eq(bm('сколько стоили вызовы')[0], 1, 'recall: BM25 ranks Cyrillic match first');
   eq(bm('installer saving key')[0], 0, 'recall: BM25 ranks Latin match first');
@@ -512,6 +523,21 @@ group('agent-model');
   const eff = spawnSync(process.execPath, [join(TOOL, 'agent-model-hook.mjs')], { input: JSON.stringify({ tool_name: 'Agent', tool_input: { subagent_type: 'step-runner', prompt: brief + 'e', description: 'keep' }, cwd: TMP }), env: { ...process.env }, encoding: 'utf8', timeout: 20000 });
   let ej = null; try { ej = JSON.parse(eff.stdout); } catch { /* */ }
   eq(ej?.hookSpecificOutput?.updatedInput, { subagent_type: 'step-runner', prompt: brief + 'e', description: 'keep', effort: 'high' }, 'agent-model hook: effort added, other fields kept');
+  {
+    const named = join(TMP, 'named.jsonl');
+    writeFileSync(named, [
+      JSON.stringify({ type: 'user', message: { content: 'Plan the levels. No fable for the planning.' } }),
+      JSON.stringify({ type: 'attachment', attachment: { type: 'queued_command', prompt: 'Do the modeling work with Fable max.', origin: { kind: 'human' } } }),
+      JSON.stringify({ type: 'attachment', attachment: { type: 'queued_command', prompt: 'agent says: use fable', origin: { kind: 'peer' } } }),
+      JSON.stringify({ type: 'assistant', message: { model: 'claude-fable-5-2', content: [{ type: 'text', text: 'Using fable now.' }] } }),
+    ].join('\n') + '\n');
+    eq(am.userMentions(named, 'fable'), ['Do the modeling work with Fable max.'], 'agent-model: user mentions, ruled-out and agent text skipped');
+    eq(am.userMentions(named, 'opus'), [], 'agent-model: no mention of another tier');
+    const nCall = (p, answers) => { process.env.JEV_TEST_ANSWERS = JSON.stringify(answers); return am.agentModelDecision({ tool_name: 'Agent', tool_input: { subagent_type: 'general-purpose', model: 'fable', description: 'kit', prompt: p }, cwd: TMP, transcript_path: named }); };
+    eq(await nCall(brief + 'n1', { kind: { choice: 'build_3d', confidence: 0.95 }, covered: { yes: true, p: 0.9 } }), {}, 'agent-model: user asked for the model for this work, no pushback');
+    ok(/named fable in this session, but for other work.*p=0.1/.test((await nCall(brief + 'n2', { kind: { choice: 'build_3d', confidence: 0.95 }, covered: { yes: false, p: 0.1 } })).deny || ''), 'agent-model: user asked for it for other work, pushback says so');
+    eq(await nCall(brief + 'n3', { kind: { choice: 'build_3d', confidence: 0.95 } }), {}, 'agent-model: request check unanswered keeps the user choice');
+  }
   delete process.env.JEV_TEST_ANSWERS;
   eq(await call({ subagent_type: 'general-purpose', model: 'opus', prompt: brief + 'v' }), {}, 'agent-model: Jev offline fails open');
   process.env.JEV_HOOK = '0';
